@@ -1,4 +1,4 @@
-# AdminCommands
+# Admin Commands
 Counter-Strike Administrative Commands
 
 This is a Counter-Strike 1.6 server commands, you are required to have the latest build of Counter-Strike 1.6 dedicated server installed on your machine or whatever you are running the server on, and having AMX Mod X 1.8.2 installed on your server.
