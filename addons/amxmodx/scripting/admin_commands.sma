@@ -78,6 +78,10 @@ enum AdminCommandTarget( )
 // Integers
 new g_iMaxPlayers;
 
+// Bitsums
+new g_bIsConnected;
+new g_bIsAlive;
+
 // Plugin starts!
 public plugin_init( )
 {
