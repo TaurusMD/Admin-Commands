@@ -181,5 +181,5 @@ public fw_Killed_Pre( victim_id, attacker_id )
 		return;
 
 	// Clear bitsum
-	ClearBit( g_bIsAlive, victim_id )
+	ClearBit( g_bIsAlive, victim_id );
 }
