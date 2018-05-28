@@ -131,7 +131,7 @@ enum _:AuthenticationInfo( )
 	AI_AUTHID,
 
 	/*
-		Authentication Information: AI_AUTHID
+		Authentication Information: AI_IP
 
 		This is an index for a function so it returns specified player's
 		IP without port (formats the string to player IP without port)
@@ -272,6 +272,19 @@ GetAuthenticationInfo( id, iAuthenticationInfo )
 
 	// Return our formatted string
 	return szAuthenticationInfo;
+}
+
+// Formats a message and logs into a file designed for events of this plugin
+AC_Log( const szFormat[ ], any:... )
+{
+	// Declare and define some variables
+	static szMessage[ 256 ], szDate[ 16 ], szFileName[ 32 ];
+	vformat( szMessage, charsmax( szMessage ), szFormat, 2 );
+	format_time( szDate, charsmax( szDate ), "%Y-%m-%d" );
+	formatex( szFileName, charsmax( szFileName ), "AC_%s.log", szDate );
+
+	// Log our message to the file! :)
+	log_to_file( szFileName, "%s", szMessage );
 }
 
 // Prefix for the plugin
