@@ -36,6 +36,45 @@
 // Version details is in the plugin_init( ) comment block before plugin registration
 #define PLUGIN_VERSION	"1.0.0"
 
+// Admin command target (Values between 1 - 32 are for player index)
+enum AdminCommandTarget( )
+{
+	/*
+		Admin Command Target: ACT_EVERYONE
+
+		This value is used to execute a certain command on all players
+		who can have that certain command executed on
+	*/
+	ACT_EVERYONE = 0,
+
+	/*
+		Admin Command Target: ACT_T
+
+		This value is used to execute a certain command on players in
+		the terrorist team that can have that certain command executed
+		on
+	*/
+	ACT_T = 33,
+
+	/*
+		Admin Command Target: ACT_CT
+
+		This value is used to execute a certain command on players in
+		the counter-terrorist team that can have that certain command
+		executed on
+	*/
+	ACT_CT = 34,
+
+	/*
+		Admin Command Target: ACT_SPECTATOR
+
+		This value is used to execute a certain command on players in
+		the spectator team that can have that certain command executed
+		on
+	*/
+	ACT_SPECTATOR = 35
+};
+
 // Integers
 new g_iMaxPlayers;
 
