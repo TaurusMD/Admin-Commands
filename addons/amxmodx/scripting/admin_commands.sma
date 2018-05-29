@@ -39,108 +39,40 @@
 // Chat colours
 enum ( )
 {
-	/*
-		Print Colour Chat: print_colour_default
-
-		Prints a default yellow colour generally, green could
-		be used in a say text message here
-	*/
 	print_colour_default = 0,
-
-	/*
-		Print Colour Chat: print_colour_grey
-
-		Prints a grey colour of the spectators team in a 
-		say text message (Green can be used)
-	*/
 	print_colour_grey = 33,
-
-	/*
-		Print Colour Chat: print_colour_red
-
-		Prints a red colour of the terrorists team in a 
-		say text message (Green can be used)
-	*/
 	print_colour_red,
-
-	/*
-		Print Colour Chat: print_colour_blue
-
-		Prints a blue colour of the counter-terrorists
-		team in a say text message (Green can be used)
-	*/
 	print_colour_blue
-};
-
-// Admin command target (Values between 1 - 32 are for player index)
-enum ( )
-{
-	/*
-		Admin Command Target: ACT_EVERYONE
-
-		This value is used to execute a certain command on all players
-		who can have that certain command executed on
-	*/
-	ACT_EVERYONE = 0,
-
-	/*
-		Admin Command Target: ACT_T
-
-		This value is used to execute a certain command on players in
-		the terrorist team that can have that certain command executed
-		on
-	*/
-	ACT_T = 33,
-
-	/*
-		Admin Command Target: ACT_CT
-
-		This value is used to execute a certain command on players in
-		the counter-terrorist team that can have that certain command
-		executed on
-	*/
-	ACT_CT,
-
-	/*
-		Admin Command Target: ACT_SPECTATOR
-
-		This value is used to execute a certain command on players in
-		the spectator team that can have that certain command executed
-		on
-	*/
-	ACT_SPECTATOR
 };
 
 // Authentication information - Function: GetAuthenticationInfo( )
 enum _:AuthenticationInfo( )
 {
-	/*
-		Authentication Information: AI_NAME
-
-		This is an index for a function so it returns specified player's
-		in-game nickname (formats the string to player name)
-	*/
 	AI_NAME = 0,
-
-	/*
-		Authentication Information: AI_AUTHID
-
-		This is an index for a function so it returns specified player's
-		steam_id or valve_id whatever (formats the string to player authid)
-	*/
 	AI_AUTHID,
-
-	/*
-		Authentication Information: AI_IP
-
-		This is an index for a function so it returns specified player's
-		IP without port (formats the string to player IP without port)
-	*/
 	AI_IP
 };
 
+// Admin command target
+enum ( )
+{
+	ACT_ALL = 0,
+	ACT_T,
+	ACT_CT
+};
+
+// Admin command target skip
+enum ( )
+{
+	ACTS_NO = 0,
+	ACTS_BOTS,
+	ACTS_DEAD
+}
+
+
 // Integers
 new g_iMaxPlayers;
+new g_iShowActivity;
 
 // Bitsums
 new g_bIsConnected;
@@ -205,14 +137,27 @@ public plugin_init( )
 	set_cvar_string( "ac_version", PLUGIN_VERSION );
 
 	// Register dictionary
-	register_dictionary_coloured( "admin_commands.txt" );
+	register_dictionary_colour( "admin_commands.txt" );
 
 	// Get maximum players (counting purposes :P)
 	g_iMaxPlayers = get_maxplayers( );
 
+	// Console commands
+	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#HP>" );
+
 	// Hamsandwich
 	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
 	RegisterHam( Ham_Killed, "player", "fw_Killed_Pre" );
+}
+
+public plugin_cfg( )
+{
+	// Retrieve show activity
+	new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
+
+	// If it does not equal to 0, update our global param :D
+	if( cvar_show_activity )
+		g_iShowActivity = get_pcvar_num( cvar_show_activity );
 }
 
 public client_putinserver( id )
@@ -229,6 +174,126 @@ public client_disconnect( id )
 	// Clear bitsum
 	ClearBit( g_bIsConnected, id );
 	ClearBit( g_bIsAlive, id );
+}
+
+public ConCommand_Health( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szHealth[ 8 ], temp_id, current_health;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szHealth, charsmax( szHealth ) );
+
+	// Regardless of the target, define new health
+	new new_health = str_to_num( szHealth );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !CheckBit( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Get current player's health
+			current_health = get_user_health( temp_id );
+
+			// Update player's health
+			set_user_health( temp_id, current_health + new_health );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d HP to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d HP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d HP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+			}
+		}
+	}
+	else
+	{
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Get current player's health
+		current_health = get_user_health( temp_id );
+
+		// Update player's health
+		set_user_health( temp_id, current_health + new_health );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Gave %d HP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
 }
 
 public fw_Spawn_Post( id )
@@ -249,6 +314,61 @@ public fw_Killed_Pre( victim_id, attacker_id )
 
 	// Clear bitsum
 	ClearBit( g_bIsAlive, victim_id );
+}
+
+GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
+{
+	// Declare variables
+	new iTargetTeam, szFlags[ 4 ];
+
+	// Check skip mode
+	switch( iSkip )
+	{
+		case ACTS_NO: szFlags = "e";
+		case ACTS_BOTS: szFlags = "ce";
+		case ACTS_DEAD: szFlags = "ae";
+	}
+
+	// Execute command on all players?
+	if( equali( szArgument[ 1 ], "ALL", strlen( szArgument[ 1 ] ) ) )
+	{
+		// Update skip mode
+		switch( iSkip )
+		{
+			case ACTS_NO: szFlags = "";
+			case ACTS_BOTS: szFlags = "c";
+			case ACTS_DEAD: szFlags = "a";
+		}
+
+		// Set target team to ALL!
+		iTargetTeam = ACT_ALL;
+
+		// Count all players with skip flags
+		get_players( iPlayers, iCount, szFlags );
+	}
+
+	// Execute command on terrorists?
+	if( equali( szArgument[ 1 ], "TERRORIST", strlen( szArgument[ 1 ] ) ) )
+	{
+		// Set target team to TERRORISTS
+		iTargetTeam = ACT_T;
+
+		// Count all players in terrorist team with skip flags
+		get_players( iPlayers, iCount, szFlags, "TERRORIST" );
+	}
+
+	// Execute command on COUNTER-TERRORISTS
+	if( equali( szArgument[ 1 ], "CT" ) || equali( szArgument[ 1 ], "C" ) || equali( szArgument[ 1 ], "COUNTER" ) )
+	{
+		// Set target team to COUNTER-TERRORISTS
+		iTargetTeam = ACT_CT;
+
+		// Count all players in counter-terrorist team with skip flags
+		get_players( iPlayers, iCount, szFlags, "CT" );
+	}
+
+	// Return target team value
+	return iTargetTeam;
 }
 
 // Formats a string to player authentication information as defined
@@ -275,7 +395,7 @@ GetAuthenticationInfo( id, iAuthenticationInfo )
 }
 
 // Formats a message and logs into a file designed for events of this plugin
-AC_Log( const szFormat[ ], any:... )
+Log( const szFormat[ ], any:... )
 {
 	// Declare and define some variables
 	static szMessage[ 256 ], szDate[ 16 ], szFileName[ 32 ];
@@ -438,7 +558,7 @@ send_say_text( receiver_id, sender_id, szMessage[ ] )
 }
 
 // Registers a coloured dictionary
-register_dictionary_color( const szFileName[ ] )
+register_dictionary_colour( const szFileName[ ] )
 {
 	if( !register_dictionary( szFileName ) )
 		return false;

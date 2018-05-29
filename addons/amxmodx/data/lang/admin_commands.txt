@@ -1,1 +1,11 @@
 [en]
+CMD_ERROR_NO_PLAYERS = No players could be targeted.
+
+CMD_HEALTH_ALL_NO_NAME = ADMIN - Gave !g%d HP!n to !gALL!n.
+CMD_HEALTH_ALL = ADMIN %s - Gave !g%d HP!n to !gALL!n players.
+CMD_HEALTH_T_NO_NAME = ADMIN - Gave !g%d HP!n to !tTERRORISTS!n.
+CMD_HEALTH_T = ADMIN %s - Gave !g%d HP!n to !tTERRORISTS!n.
+CMD_HEALTH_CT_NO_NAME = ADMIN - Gave !g%d HP!n to !tCOUNTER-TERRORISTS!n.
+CMD_HEALTH_CT = ADMIN %s - Gave !g%d HP!n to !tCOUNTER-TERRORISTS!n.
+CMD_HEALTH_PLAYER_NO_NAME = ADMIN - Gave !g%d HP!n to !t%s!n.
+CMD_HEALTH_PLAYER = ADMIN %s - Gave !g%d HP!n to !t%s!n.
