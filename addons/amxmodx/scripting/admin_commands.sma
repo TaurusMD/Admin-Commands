@@ -34,7 +34,7 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && CheckBit( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.0"
+#define PLUGIN_VERSION	"1.0.1"
 
 // Chat colours
 enum ( )
@@ -108,6 +108,11 @@ public plugin_init( )
 		- Created the basic structure of the plugin
 		- Added the command "ac_health"
 
+		v1.0.1 - Beta release - 29-05-2018 / Tuesday (In Development)
+		- Added the command "ac_armour" for admins with ADMIN_LEVEL_A access
+		- Added the command "ac_noclip" for admins with ADMIN_LEVEL_A access
+		- Added the command "ac_godmode" for admins with ADMIN_LEVEL_A access
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -127,9 +132,9 @@ public plugin_init( )
 		[ x ] -> Cancelled
 		
 		Date: 29-05-2018 - Day: Tuesday
-		- [ - ] Add the command "ac_armour" - ADMIN_LEVEL_A
-		- [ - ] Add the command "ac_noclip" - ADMIN_LEVEL_A
-		- [ - ] Add the command "ac_godmode" - ADMIN_LEVEL_A
+		- [ + ] Add the command "ac_armour" - ADMIN_LEVEL_A (v1.0.1)
+		- [ + ] Add the command "ac_noclip" - ADMIN_LEVEL_A (v1.0.1)
+		- [ + ] Add the command "ac_godmode" - ADMIN_LEVEL_A (v1.0.1)
 		- [ - ] Add the command "ac_money" - ADMIN_LEVEL_A
 
 	=========================================================================== */
@@ -149,6 +154,9 @@ public plugin_init( )
 
 	// Console commands
 	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#HP>" );
+	register_concmd( "ac_armour", "ConCommand_Armour", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#AP>" );
+	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#NC>" );
+	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#GM>" );
 
 	// Hamsandwich
 	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
@@ -276,8 +284,10 @@ public ConCommand_Health( id, iAccess, command_id )
 	}
 	else
 	{
+		// Define a single player target id
 		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
 
+		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
 			return PLUGIN_HANDLED;
 
@@ -296,6 +306,360 @@ public ConCommand_Health( id, iAccess, command_id )
 
 		// Log administrative action
 		Log( "ADMIN %s <%s><%s> - Gave %d HP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCommand_Armour( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szArmour[ 8 ], temp_id, current_armour;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szArmour, charsmax( szArmour ) );
+
+	// Regardless of the target, define new armour
+	new new_armour = str_to_num( szArmour );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !CheckBit( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Get current player's armour
+			current_armour = get_user_armor( temp_id );
+
+			// Update player's armour
+			set_user_armor( temp_id, current_armour + new_armour );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d AP to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d AP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d AP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Get current player's armour
+		current_armour = get_user_armor( temp_id );
+
+		// Update player's armour
+		set_user_armor( temp_id, current_armour + new_armour );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Gave %d AP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCommand_Noclip( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szNoclip[ 2 ], temp_id;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szNoclip, charsmax( szNoclip ) );
+
+	// Regardless of the target, define new noclip
+	new new_noclip = clamp( str_to_num( szNoclip ), 0, 1 );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !CheckBit( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Update player's noclip
+			set_user_noclip( temp_id, new_noclip );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set noclip to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set noclip to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set noclip to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Update player's noclip
+		set_user_noclip( temp_id, new_noclip );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Set noclip to %d for %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCommand_Godmode( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szGodmode[ 2 ], temp_id;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szGodmode, charsmax( szGodmode ) );
+
+	// Regardless of the target, define new godmode
+	new new_godmode = clamp( str_to_num( szGodmode ), 0, 1 );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !CheckBit( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Update player's godmode
+			set_user_godmode( temp_id, new_godmode );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set godmode to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set godmode to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Set godmode to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Update player's godmode
+		set_user_godmode( temp_id, new_godmode );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Set godmode to %d for %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
 	}
 
 	return PLUGIN_HANDLED;

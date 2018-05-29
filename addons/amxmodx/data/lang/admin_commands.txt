@@ -2,10 +2,37 @@
 CMD_ERROR_NO_PLAYERS = No players could be targeted.
 
 CMD_HEALTH_ALL_NO_NAME = ADMIN - Gave !g%d HP!n to !gALL!n.
-CMD_HEALTH_ALL = ADMIN %s - Gave !g%d HP!n to !gALL!n players.
+CMD_HEALTH_ALL = ADMIN %s - Gave !g%d HP!n to !gALL!n.
 CMD_HEALTH_T_NO_NAME = ADMIN - Gave !g%d HP!n to !tTERRORISTS!n.
 CMD_HEALTH_T = ADMIN %s - Gave !g%d HP!n to !tTERRORISTS!n.
 CMD_HEALTH_CT_NO_NAME = ADMIN - Gave !g%d HP!n to !tCOUNTER-TERRORISTS!n.
 CMD_HEALTH_CT = ADMIN %s - Gave !g%d HP!n to !tCOUNTER-TERRORISTS!n.
 CMD_HEALTH_PLAYER_NO_NAME = ADMIN - Gave !g%d HP!n to !t%s!n.
 CMD_HEALTH_PLAYER = ADMIN %s - Gave !g%d HP!n to !t%s!n.
+
+CMD_ARMOUR_ALL_NO_NAME = ADMIN - Gave !g%d AP!n to !gALL!n.
+CMD_ARMOUR_ALL = ADMIN %s - Gave !g%d AP!n to !gALL!n.
+CMD_ARMOUR_T_NO_NAME = ADMIN - Gave !g%d AP!n to !tTERRORISTS!n.
+CMD_ARMOUR_T = ADMIN %s - Gave !g%d AP!n to !tTERRORISTS!n.
+CMD_ARMOUR_CT_NO_NAME = ADMIN - Gave !g%d AP!n to !tCOUNTER-TERRORISTS!n.
+CMD_ARMOUR_CT = ADMIN %s - Gave !g%d AP!n to !tCOUNTER-TERRORISTS!n.
+CMD_ARMOUR_PLAYER_NO_NAME = ADMIN - Gave !g%d AP!n to !t%s!n.
+CMD_ARMOUR_PLAYER = ADMIN %s - Gave !g%d AP!n to !t%s!n.
+
+CMD_NOCLIP_ALL_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !gALL!n.
+CMD_NOCLIP_ALL = ADMIN %s - Set !gnoclip!n to !g%d!n for !gALL!n.
+CMD_NOCLIP_T_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !tTERRORISTS!n.
+CMD_NOCLIP_T = ADMIN %s - Set !gnoclip!n to !g%d!n for !tTERRORISTS!n.
+CMD_NOCLIP_CT_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !tCOUNTER-TERRORISTS!n.
+CMD_NOCLIP_CT = ADMIN %s - Set !gnoclip!n to !g%d!n for !tCOUNTER-TERRORISTS!n.
+CMD_NOCLIP_PLAYER_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !t%s!n.
+CMD_NOCLIP_PLAYER = ADMIN %s - Set !gnoclip!n to !g%d!n for !t%s!n.
+
+CMD_GODMODE_ALL_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !gALL!n.
+CMD_GODMODE_ALL = ADMIN %s - Set !ggodmode!n to !g%d!n for !gALL!n.
+CMD_GODMODE_T_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !tTERRORISTS!n.
+CMD_GODMODE_T = ADMIN %s - Set !ggodmode!n to !g%d!n for !tTERRORISTS!n.
+CMD_GODMODE_CT_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !tCOUNTER-TERRORISTS!n.
+CMD_GODMODE_CT = ADMIN %s - Set !ggodmode!n to !g%d!n for !tCOUNTER-TERRORISTS!n.
+CMD_GODMODE_PLAYER_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !t%s!n.
+CMD_GODMODE_PLAYER = ADMIN %s - Set !ggodmode!n to !g%d!n for !t%s!n.
