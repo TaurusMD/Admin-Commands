@@ -104,8 +104,9 @@ public plugin_init( )
 		-*- Changelog -*-
 		-----------------
 
-		v1.0.0 - First release - DATE / DAY (In Development)
-		- Basic and most important commands
+		v1.0.0 - First release - 29-05-2018 / Tuesday (In Development)
+		- Created the basic structure of the plugin
+		- Added the command "ac_health"
 
 	=========================================================================== */
 
@@ -118,14 +119,18 @@ public plugin_init( )
 		Todos are marked with 4 different characters with different meaning,
 		on every new version, this todo list is removed and probably added to
 		the next version changelog, new entries here are based on testing the
-		plugin in a test server or suggestions from Jailbreak players
+		plugin in a test server or suggestions from beta testers
 
 		[ - ] -> Not implemented (Pending)
 		[ + ] -> Implemented, completely done and tested
 		[ * ] -> Implemented, completely done but not tested
 		[ x ] -> Cancelled
 		
-		Date: N/A - Day: N/A
+		Date: 29-05-2018 - Day: Tuesday
+		- [ - ] Add the command "ac_armour" - ADMIN_LEVEL_A
+		- [ - ] Add the command "ac_noclip" - ADMIN_LEVEL_A
+		- [ - ] Add the command "ac_godmode" - ADMIN_LEVEL_A
+		- [ - ] Add the command "ac_money" - ADMIN_LEVEL_A
 
 	=========================================================================== */
 
