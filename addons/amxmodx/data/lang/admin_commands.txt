@@ -19,6 +19,15 @@ CMD_ARMOUR_CT = ADMIN %s - Gave !g%d AP!n to !tCOUNTER-TERRORISTS!n.
 CMD_ARMOUR_PLAYER_NO_NAME = ADMIN - Gave !g%d AP!n to !t%s!n.
 CMD_ARMOUR_PLAYER = ADMIN %s - Gave !g%d AP!n to !t%s!n.
 
+CMD_MONEY_ALL_NO_NAME = ADMIN - Gave !g%d money!n to !gALL!n.
+CMD_MONEY_ALL = ADMIN %s - Gave !g%d money!n to !gALL!n.
+CMD_MONEY_T_NO_NAME = ADMIN - Gave !g%d money!n to !tTERRORISTS!n.
+CMD_MONEY_T = ADMIN %s - Gave !g%d money!n to !tTERRORISTS!n.
+CMD_MONEY_CT_NO_NAME = ADMIN - Gave !g%d money!n to !tCOUNTER-TERRORISTS!n.
+CMD_MONEY_CT = ADMIN %s - Gave !g%d money!n to !tCOUNTER-TERRORISTS!n.
+CMD_MONEY_PLAYER_NO_NAME = ADMIN - Gave !g%d money!n to !t%s!n.
+CMD_MONEY_PLAYER = ADMIN %s - Gave !g%d money!n to !t%s!n.
+
 CMD_NOCLIP_ALL_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !gALL!n.
 CMD_NOCLIP_ALL = ADMIN %s - Set !gnoclip!n to !g%d!n for !gALL!n.
 CMD_NOCLIP_T_NO_NAME = ADMIN - Set !gnoclip!n to !g%d!n for !tTERRORISTS!n.

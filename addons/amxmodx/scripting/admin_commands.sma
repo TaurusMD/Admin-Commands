@@ -34,7 +34,7 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && CheckBit( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.1"
+#define PLUGIN_VERSION	"1.0.2"
 
 // Chat colours
 enum ( )
@@ -89,7 +89,7 @@ public plugin_init( )
 
 		Version string is divided into three parts:
 		A- Major version number -> Major changes, new functions and updates
-		B- Minor version number -> Better codes, minor optimisations 
+		B- Minor version number -> Better codes, major optimisations 
 		C- Beta version number -> Brief updates and bug fixes
 
 		- If major version number changes, both minor and beta reset to 0
@@ -113,6 +113,11 @@ public plugin_init( )
 		- Added the command "ac_noclip" for admins with ADMIN_LEVEL_A access
 		- Added the command "ac_godmode" for admins with ADMIN_LEVEL_A access
 
+		v1.0.2 - Beta release - 03-06-2018 / Sunday (In Development)
+		- Added the command "ac_money" for admins with ADMIN_LEVEL_A access
+		- Updated syntax text for "ac_noclip" and "ac_godmode" commands
+		- Updated "amx_show_activity" cvar retrieving method
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -132,10 +137,10 @@ public plugin_init( )
 		[ x ] -> Cancelled
 		
 		Date: 29-05-2018 - Day: Tuesday
-		- [ + ] Add the command "ac_armour" - ADMIN_LEVEL_A (v1.0.1)
-		- [ + ] Add the command "ac_noclip" - ADMIN_LEVEL_A (v1.0.1)
-		- [ + ] Add the command "ac_godmode" - ADMIN_LEVEL_A (v1.0.1)
-		- [ - ] Add the command "ac_money" - ADMIN_LEVEL_A
+		[ + ] Add the command "ac_armour" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
+		[ + ] Add the command "ac_noclip" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
+		[ + ] Add the command "ac_godmode" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
+		[ + ] Add the command "ac_money" - ADMIN_LEVEL_A (v1.0.2) 03-06-2018
 
 	=========================================================================== */
 
@@ -153,10 +158,11 @@ public plugin_init( )
 	g_iMaxPlayers = get_maxplayers( );
 
 	// Console commands
-	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#HP>" );
-	register_concmd( "ac_armour", "ConCommand_Armour", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#AP>" );
-	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#NC>" );
-	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #userid | authid | @team> <#GM>" );
+	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
+	register_concmd( "ac_armour", "ConCommand_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
+	register_concmd( "ac_money", "ConCommand_Money", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#Money>" );
+	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1>" );
+	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1>" );
 
 	// Hamsandwich
 	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
@@ -168,8 +174,16 @@ public plugin_cfg( )
 	// Retrieve show activity
 	new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
 
-	// If it does not equal to 0, update our global param :D
-	if( cvar_show_activity )
+	// Is this cvar enabled or even exist?
+	if( cvar_show_activity == 0 )
+	{
+		// Register it
+		cvar_show_activity = register_cvar( "amx_show_activity", "2" );
+
+		// Cache it
+		g_iShowActivity = get_pcvar_num( cvar_show_activity );
+	}
+	else
 		g_iShowActivity = get_pcvar_num( cvar_show_activity );
 }
 
@@ -428,6 +442,128 @@ public ConCommand_Armour( id, iAccess, command_id )
 
 		// Log administrative action
 		Log( "ADMIN %s <%s><%s> - Gave %d AP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCommand_Money( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szMoney[ 8 ], temp_id, current_money;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szMoney, charsmax( szMoney ) );
+
+	// Regardless of the target, define new money
+	new new_money = str_to_num( szMoney );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_BOTS );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !CheckBit( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Get current player's money
+			current_money = cs_get_user_money( temp_id );
+
+			// Update player's money
+			cs_set_user_money( temp_id, current_money + new_money );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d money to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d money to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Gave %d money to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_NO_BOTS );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Get current player's money
+		current_money = cs_get_user_money( temp_id );
+
+		// Update player's money
+		cs_set_user_money( temp_id, current_money + new_money );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Gave %d money to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
