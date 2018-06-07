@@ -21,20 +21,20 @@
 #pragma semicolon 1;
 
 // Turns stuff into bitsums
-#define TurnIntoBit(%1)	( 1 << %1 )
+#define turn_into_bit(%1)	( 1 << %1 )
 
 // Bitsums!
-#define SetBit(%1,%2)	( %1 |= TurnIntoBit( %2 - 1 ) )
-#define ClearBit(%1,%2)	( %1 &= ~ TurnIntoBit( %2 - 1 ) )
-#define CheckBit(%1,%2)	( %1 & TurnIntoBit( %2 - 1 ) )
+#define bit_set(%1,%2)	( %1 |= turn_into_bit( %2 - 1 ) )
+#define bit_del(%1,%2)	( %1 &= ~ turn_into_bit( %2 - 1 ) )
+#define bit_get(%1,%2)	( %1 & turn_into_bit( %2 - 1 ) )
 
 // Checks whether a player is valid or not
 #define is_user_valid(%1)			( 1 <= %1 <= g_iMaxPlayers )
-#define is_user_valid_connected(%1)	( is_user_valid( %1 ) && CheckBit( g_bIsConnected, %1 ) )
-#define is_user_valid_alive(%1)		( is_user_valid( %1 ) && CheckBit( g_bIsAlive, %1 ) )
+#define is_user_valid_connected(%1)	( is_user_valid( %1 ) && bit_get( g_bIsConnected, %1 ) )
+#define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.2"
+#define PLUGIN_VERSION	"1.0.3"
 
 // Chat colours
 enum ( )
@@ -77,6 +77,8 @@ new g_iShowActivity;
 // Bitsums
 new g_bIsConnected;
 new g_bIsAlive;
+new g_bHasInfiniteNoclip;
+new g_bHasInfiniteGodmode;
 
 // Plugin starts!
 public plugin_init( )
@@ -118,6 +120,10 @@ public plugin_init( )
 		- Updated syntax text for "ac_noclip" and "ac_godmode" commands
 		- Updated "amx_show_activity" cvar retrieving method
 
+		v1.0.3 - Beta release - 07-06-2018 / Thursday (In Development)
+		- Updated noclip command to be set until disabled
+		- Updated godmode command to be set until disabled
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -137,10 +143,17 @@ public plugin_init( )
 		[ x ] -> Cancelled
 		
 		Date: 29-05-2018 - Day: Tuesday
-		[ + ] Add the command "ac_armour" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
-		[ + ] Add the command "ac_noclip" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
-		[ + ] Add the command "ac_godmode" - ADMIN_LEVEL_A (v1.0.1) 29-05-2018
-		[ + ] Add the command "ac_money" - ADMIN_LEVEL_A (v1.0.2) 03-06-2018
+		[ + ] Add the command "ac_armour" - ADMIN_LEVEL_A (v1.0.1)
+		[ + ] Add the command "ac_noclip" - ADMIN_LEVEL_A (v1.0.1)
+		[ + ] Add the command "ac_godmode" - ADMIN_LEVEL_A (v1.0.1)
+		[ + ] Add the command "ac_money" - ADMIN_LEVEL_A (v1.0.2)
+
+		Date: 07-06-2018 - Day: Thursday
+		[ * ] Update noclip command to be set until disabled (v1.0.3)
+		[ * ] Update godmode command to be set until disabled (v1.0.3)
+		[ - ] Add the command "ac_revive" - ADMIN_LEVEL_A
+		[ - ] Add the command "ac_transfer" - ADMIN_LEVEL_A
+		[ - ] Add the command "ac_spectate" - ADMIN_LEVEL_A
 
 	=========================================================================== */
 
@@ -161,8 +174,8 @@ public plugin_init( )
 	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
 	register_concmd( "ac_armour", "ConCommand_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
 	register_concmd( "ac_money", "ConCommand_Money", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#Money>" );
-	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1>" );
-	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1>" );
+	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
 
 	// Hamsandwich
 	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
@@ -174,7 +187,7 @@ public plugin_cfg( )
 	// Retrieve show activity
 	new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
 
-	// Is this cvar enabled or even exist?
+	// Is this cvar enabled or even exists?
 	if( cvar_show_activity == 0 )
 	{
 		// Register it
@@ -190,17 +203,21 @@ public plugin_cfg( )
 public client_putinserver( id )
 {
 	// Set bitsum
-	SetBit( g_bIsConnected, id );
+	bit_set( g_bIsConnected, id );
 
 	// Clear bitsum
-	ClearBit( g_bIsAlive, id );
+	bit_del( g_bIsAlive, id );
+	bit_del( g_bHasInfiniteNoclip, id );
+	bit_del( g_bHasInfiniteGodmode, id );
 }
 
 public client_disconnect( id )
 {
 	// Clear bitsum
-	ClearBit( g_bIsConnected, id );
-	ClearBit( g_bIsAlive, id );
+	bit_del( g_bIsConnected, id );
+	bit_del( g_bIsAlive, id );
+	bit_del( g_bHasInfiniteNoclip, id );
+	bit_del( g_bHasInfiniteGodmode, id );
 }
 
 public ConCommand_Health( id, iAccess, command_id )
@@ -237,7 +254,7 @@ public ConCommand_Health( id, iAccess, command_id )
 			temp_id = iPlayers[ iLoop ];
 
 			// Player is not in-game?
-			if( !CheckBit( g_bIsConnected, temp_id ) )
+			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
 			// Skip immunity (But allow to self)!
@@ -359,7 +376,7 @@ public ConCommand_Armour( id, iAccess, command_id )
 			temp_id = iPlayers[ iLoop ];
 
 			// Player is not in-game?
-			if( !CheckBit( g_bIsConnected, temp_id ) )
+			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
 			// Skip immunity (But allow to self)!
@@ -481,7 +498,7 @@ public ConCommand_Money( id, iAccess, command_id )
 			temp_id = iPlayers[ iLoop ];
 
 			// Player is not in-game?
-			if( !CheckBit( g_bIsConnected, temp_id ) )
+			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
 			// Skip immunity (But allow to self)!
@@ -581,7 +598,7 @@ public ConCommand_Noclip( id, iAccess, command_id )
 	read_argv( 2, szNoclip, charsmax( szNoclip ) );
 
 	// Regardless of the target, define new noclip
-	new new_noclip = clamp( str_to_num( szNoclip ), 0, 1 );
+	new new_noclip = clamp( str_to_num( szNoclip ), 0, 2 );
 
 	// What's our argument
 	if( szTarget[ 0 ] == '@' )
@@ -603,7 +620,7 @@ public ConCommand_Noclip( id, iAccess, command_id )
 			temp_id = iPlayers[ iLoop ];
 
 			// Player is not in-game?
-			if( !CheckBit( g_bIsConnected, temp_id ) )
+			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
 			// Skip immunity (But allow to self)!
@@ -612,6 +629,12 @@ public ConCommand_Noclip( id, iAccess, command_id )
 
 			// Update player's noclip
 			set_user_noclip( temp_id, new_noclip );
+
+			// Should we set infinite noclip?
+			if( new_noclip > 1 )
+				bit_set( g_bHasInfiniteNoclip, temp_id );
+			else
+				bit_del( g_bHasInfiniteNoclip, temp_id );
 		}
 
 		switch( iTargetTeam )
@@ -671,6 +694,12 @@ public ConCommand_Noclip( id, iAccess, command_id )
 		// Update player's noclip
 		set_user_noclip( temp_id, new_noclip );
 
+		// Should we set infinite noclip?
+		if( new_noclip > 1 )
+			bit_set( g_bHasInfiniteNoclip, temp_id );
+		else
+			bit_del( g_bHasInfiniteNoclip, temp_id );
+
 		// Notice message format
 		switch( g_iShowActivity )
 		{
@@ -697,7 +726,7 @@ public ConCommand_Godmode( id, iAccess, command_id )
 	read_argv( 2, szGodmode, charsmax( szGodmode ) );
 
 	// Regardless of the target, define new godmode
-	new new_godmode = clamp( str_to_num( szGodmode ), 0, 1 );
+	new new_godmode = clamp( str_to_num( szGodmode ), 0, 2 );
 
 	// What's our argument
 	if( szTarget[ 0 ] == '@' )
@@ -719,7 +748,7 @@ public ConCommand_Godmode( id, iAccess, command_id )
 			temp_id = iPlayers[ iLoop ];
 
 			// Player is not in-game?
-			if( !CheckBit( g_bIsConnected, temp_id ) )
+			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
 			// Skip immunity (But allow to self)!
@@ -728,6 +757,12 @@ public ConCommand_Godmode( id, iAccess, command_id )
 
 			// Update player's godmode
 			set_user_godmode( temp_id, new_godmode );
+
+			// Should we set infinite godmode?
+			if( new_godmode > 1 )
+				bit_set( g_bHasInfiniteGodmode, temp_id );
+			else
+				bit_del( g_bHasInfiniteGodmode, temp_id );
 		}
 
 		switch( iTargetTeam )
@@ -787,6 +822,12 @@ public ConCommand_Godmode( id, iAccess, command_id )
 		// Update player's godmode
 		set_user_godmode( temp_id, new_godmode );
 
+		// Should we set infinite godmode?
+		if( new_godmode > 1 )
+			bit_set( g_bHasInfiniteGodmode, temp_id );
+		else
+			bit_del( g_bHasInfiniteGodmode, temp_id );
+
 		// Notice message format
 		switch( g_iShowActivity )
 		{
@@ -808,7 +849,19 @@ public fw_Spawn_Post( id )
 		return;
 
 	// Set bitsum
-	SetBit( g_bIsAlive, id );
+	bit_set( g_bIsAlive, id );
+
+	// Reset noclip
+	if( bit_get( g_bHasInfiniteNoclip, id ) )
+		set_user_noclip( id, 1 );
+	else
+		set_user_noclip( id, 0 );
+
+	// Reset godmode
+	if( bit_get( g_bHasInfiniteGodmode, id ) )
+		set_user_godmode( id, 1 );
+	else
+		set_user_godmode( id, 0 );
 }
 
 public fw_Killed_Pre( victim_id, attacker_id )
@@ -818,7 +871,7 @@ public fw_Killed_Pre( victim_id, attacker_id )
 		return;
 
 	// Clear bitsum
-	ClearBit( g_bIsAlive, victim_id );
+	bit_del( g_bIsAlive, victim_id );
 }
 
 GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
@@ -863,7 +916,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 	}
 
 	// Execute command on COUNTER-TERRORISTS
-	if( equali( szArgument[ 1 ], "CT" ) || equali( szArgument[ 1 ], "C" ) || equali( szArgument[ 1 ], "COUNTER" ) )
+	if( equali( szArgument[ 1 ], "CT", strlen( szArgument[ 1 ] ) ) )
 	{
 		// Set target team to COUNTER-TERRORISTS
 		iTargetTeam = ACT_CT;
