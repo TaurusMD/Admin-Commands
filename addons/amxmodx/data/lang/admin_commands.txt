@@ -1,5 +1,11 @@
 [en]
 CMD_ERROR_NO_PLAYERS = No players could be targeted.
+CMD_ERROR_NO_TEAM = Command cannot be performed to set on invalid team.
+CMD_ERROR_ALIVE = Command cannot be performed on an alive player (%s).
+
+MSG_CS_TEAM_T = TERRORIST
+MSG_CS_TEAM_CT = COUNTER-TERRORIST
+MSG_CS_TEAM_SPECTATOR = SPECTATOR
 
 CMD_HEALTH_ALL_NO_NAME = ADMIN - Gave !g%d HP!n to !gALL!n.
 CMD_HEALTH_ALL = ADMIN %s - Gave !g%d HP!n to !gALL!n.
@@ -45,3 +51,21 @@ CMD_GODMODE_CT_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !tCOUNTER-TERRORI
 CMD_GODMODE_CT = ADMIN %s - Set !ggodmode!n to !g%d!n for !tCOUNTER-TERRORISTS!n.
 CMD_GODMODE_PLAYER_NO_NAME = ADMIN - Set !ggodmode!n to !g%d!n for !t%s!n.
 CMD_GODMODE_PLAYER = ADMIN %s - Set !ggodmode!n to !g%d!n for !t%s!n.
+
+CMD_REVIVE_ALL_NO_NAME = ADMIN - Revived !gALL!n.
+CMD_REVIVE_ALL = ADMIN %s - Revived !gALL!n.
+CMD_REVIVE_T_NO_NAME = ADMIN - Revived !tTERRORISTS!n.
+CMD_REVIVE_T = ADMIN %s - Revived !tTERRORISTS!n.
+CMD_REVIVE_CT_NO_NAME = ADMIN - Revived !tCOUNTER-TERRORISTS!n.
+CMD_REVIVE_CT = ADMIN %s - Revived !tCOUNTER-TERRORISTS!n.
+CMD_REVIVE_PLAYER_NO_NAME = ADMIN - Revived !t%s!n.
+CMD_REVIVE_PLAYER = ADMIN %s - Revived !t%s!n.
+
+CMD_TRANSFER_ALL_NO_NAME = ADMIN - Transferred !gALL!n to !g%s!n team.
+CMD_TRANSFER_ALL = ADMIN %s - Transferred !gALL!n to !g%s!n team.
+CMD_TRANSFER_T_NO_NAME = ADMIN - Transferred !tTERRORISTS!n to !g%s!n team.
+CMD_TRANSFER_T = ADMIN %s - Transferred !tTERRORISTS!n to !g%s!n team.
+CMD_TRANSFER_CT_NO_NAME = ADMIN - Transferred !tCOUNTER-TERRORISTS!n to !g%s!n team.
+CMD_TRANSFER_CT = ADMIN %s - Transferred !tCOUNTER-TERRORISTS!n to !g%s!n team.
+CMD_TRANSFER_PLAYER_NO_NAME = ADMIN - Transferred !t%s!n to !g%s!n team.
+CMD_TRANSFER_PLAYER = ADMIN %s - Transferred !t%s!n to !g%s!n team.

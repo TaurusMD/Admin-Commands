@@ -34,7 +34,7 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.3"
+#define PLUGIN_VERSION	"1.0.4"
 
 // Chat colours
 enum ( )
@@ -66,9 +66,9 @@ enum ( )
 {
 	ACTS_NO = 0,
 	ACTS_BOTS,
-	ACTS_DEAD
-}
-
+	ACTS_DEAD,
+	ACTS_ALIVE
+};
 
 // Integers
 new g_iMaxPlayers;
@@ -124,6 +124,13 @@ public plugin_init( )
 		- Updated noclip command to be set until disabled
 		- Updated godmode command to be set until disabled
 
+		v1.0.4 - Beta release - 08-06-2018 / Friday (In Development)
+		- Added the command "ac_revive" for admins with ADMIN_LEVEL_A access
+		- Added the command "ac_transfer" for admins with ADMIN_LEVEL_A access
+		- Fixed bug with infinite noclip not set immediately
+		- Fixed bug with infinite godmode not set immediately
+		- Updated 'GetTeamTarget( )' to also skip alive players
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -149,11 +156,15 @@ public plugin_init( )
 		[ + ] Add the command "ac_money" - ADMIN_LEVEL_A (v1.0.2)
 
 		Date: 07-06-2018 - Day: Thursday
-		[ * ] Update noclip command to be set until disabled (v1.0.3)
-		[ * ] Update godmode command to be set until disabled (v1.0.3)
-		[ - ] Add the command "ac_revive" - ADMIN_LEVEL_A
-		[ - ] Add the command "ac_transfer" - ADMIN_LEVEL_A
+		[ + ] Update noclip command to be set until disabled (v1.0.3)
+		[ + ] Update godmode command to be set until disabled (v1.0.3)
+		[ * ] Add the command "ac_revive" - ADMIN_LEVEL_A (v1.0.4)
+		[ * ] Add the command "ac_transfer" - ADMIN_LEVEL_A (v1.0.4)
 		[ - ] Add the command "ac_spectate" - ADMIN_LEVEL_A
+
+		Date: 08-06-2018 - Day: Friday
+		[ + ] Fix bug with infinite noclip not set immediately (v1.0.4)
+		[ + ] Fix bug with infinite godmode not set immediately (v1.0.4)
 
 	=========================================================================== */
 
@@ -171,11 +182,13 @@ public plugin_init( )
 	g_iMaxPlayers = get_maxplayers( );
 
 	// Console commands
-	register_concmd( "ac_health", "ConCommand_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
-	register_concmd( "ac_armour", "ConCommand_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
-	register_concmd( "ac_money", "ConCommand_Money", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#Money>" );
-	register_concmd( "ac_noclip", "ConCommand_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
-	register_concmd( "ac_godmode", "ConCommand_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "ac_health", "ConCmd_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
+	register_concmd( "ac_armour", "ConCmd_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
+	register_concmd( "ac_money", "ConCmd_Money", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#Money>" );
+	register_concmd( "ac_noclip", "ConCmd_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "ac_godmode", "ConCmd_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "ac_revive", "ConCmd_Revive", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team>" );
+	register_concmd( "ac_transfer", "ConCmd_Transfer", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <T | CT | SPEC>" );
 
 	// Hamsandwich
 	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
@@ -220,7 +233,7 @@ public client_disconnect( id )
 	bit_del( g_bHasInfiniteGodmode, id );
 }
 
-public ConCommand_Health( id, iAccess, command_id )
+public ConCmd_Health( id, iAccess, command_id )
 {
 	// No access?
 	if( !cmd_access( id, iAccess, command_id, 3 ) )
@@ -342,7 +355,7 @@ public ConCommand_Health( id, iAccess, command_id )
 	return PLUGIN_HANDLED;
 }
 
-public ConCommand_Armour( id, iAccess, command_id )
+public ConCmd_Armour( id, iAccess, command_id )
 {
 	// No access?
 	if( !cmd_access( id, iAccess, command_id, 3 ) )
@@ -464,7 +477,7 @@ public ConCommand_Armour( id, iAccess, command_id )
 	return PLUGIN_HANDLED;
 }
 
-public ConCommand_Money( id, iAccess, command_id )
+public ConCmd_Money( id, iAccess, command_id )
 {
 	// No access?
 	if( !cmd_access( id, iAccess, command_id, 3 ) )
@@ -586,7 +599,7 @@ public ConCommand_Money( id, iAccess, command_id )
 	return PLUGIN_HANDLED;
 }
 
-public ConCommand_Noclip( id, iAccess, command_id )
+public ConCmd_Noclip( id, iAccess, command_id )
 {
 	// No access?
 	if( !cmd_access( id, iAccess, command_id, 3 ) )
@@ -628,7 +641,7 @@ public ConCommand_Noclip( id, iAccess, command_id )
 				continue;
 
 			// Update player's noclip
-			set_user_noclip( temp_id, new_noclip );
+			set_user_noclip( temp_id, new_noclip ? 1 : 0 );
 
 			// Should we set infinite noclip?
 			if( new_noclip > 1 )
@@ -692,7 +705,7 @@ public ConCommand_Noclip( id, iAccess, command_id )
 			return PLUGIN_HANDLED;
 
 		// Update player's noclip
-		set_user_noclip( temp_id, new_noclip );
+		set_user_noclip( temp_id, new_noclip ? 1 : 0 );
 
 		// Should we set infinite noclip?
 		if( new_noclip > 1 )
@@ -714,7 +727,7 @@ public ConCommand_Noclip( id, iAccess, command_id )
 	return PLUGIN_HANDLED;
 }
 
-public ConCommand_Godmode( id, iAccess, command_id )
+public ConCmd_Godmode( id, iAccess, command_id )
 {
 	// No access?
 	if( !cmd_access( id, iAccess, command_id, 3 ) )
@@ -756,7 +769,7 @@ public ConCommand_Godmode( id, iAccess, command_id )
 				continue;
 
 			// Update player's godmode
-			set_user_godmode( temp_id, new_godmode );
+			set_user_godmode( temp_id, new_godmode ? 1 : 0 );
 
 			// Should we set infinite godmode?
 			if( new_godmode > 1 )
@@ -820,7 +833,7 @@ public ConCommand_Godmode( id, iAccess, command_id )
 			return PLUGIN_HANDLED;
 
 		// Update player's godmode
-		set_user_godmode( temp_id, new_godmode );
+		set_user_godmode( temp_id, new_godmode ? 1 : 0 );
 
 		// Should we set infinite godmode?
 		if( new_godmode > 1 )
@@ -837,6 +850,308 @@ public ConCommand_Godmode( id, iAccess, command_id )
 
 		// Log administrative action
 		Log( "ADMIN %s <%s><%s> - Set godmode to %d for %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCmd_Revive( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 2 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], temp_id;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_ALIVE );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !bit_get( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Revive target!
+			ExecuteHamB( Ham_CS_RoundRespawn, temp_id );
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Revived ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Revived TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Revived COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Player is alive? Ignore!
+		if( is_user_valid_alive( temp_id ) )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_ALIVE", GetAuthenticationInfo( temp_id, AI_NAME ) );
+			return PLUGIN_HANDLED;
+		}
+
+		// Revive target!
+		ExecuteHamB( Ham_CS_RoundRespawn, temp_id );
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Revived %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+	}
+
+	return PLUGIN_HANDLED;
+}
+
+public ConCmd_Transfer( id, iAccess, command_id )
+{
+	// No access?
+	if( !cmd_access( id, iAccess, command_id, 3 ) )
+		return PLUGIN_HANDLED;
+
+	// Retrieve arguments
+	new szTarget[ 32 ], szTeam[ 32 ], temp_id;
+	read_argv( 1, szTarget, charsmax( szTarget ) );
+	read_argv( 2, szTeam, charsmax( szTeam ) );
+
+	// Regardless of the target, define new team
+	new CsTeams:iTeam;
+
+	// What's our argument
+	switch( szTeam[ 0 ] )
+	{
+		// Terrorist?
+		case 'T', 't': iTeam = CS_TEAM_T;
+
+		// Counter-Terrorist?
+		case 'C', 'c': iTeam = CS_TEAM_CT;
+
+		// Spectator?
+		case 'S', 's': iTeam = CS_TEAM_SPECTATOR;
+
+		// Unknown? Unassigned?
+		default:
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_TEAM" );
+			return PLUGIN_HANDLED;
+		}
+	}
+
+	// Now let's define team string?
+	switch( iTeam )
+	{
+		// Terrorist?
+		case CS_TEAM_T: formatex( szTeam, charsmax( szTeam ), "%L", LANG_SERVER, "MSG_CS_TEAM_T" );
+
+		// Counter-Terrorist?
+		case CS_TEAM_CT: formatex( szTeam, charsmax( szTeam ), "%L", LANG_SERVER, "MSG_CS_TEAM_CT" );
+
+		// Spectator?
+		case CS_TEAM_SPECTATOR:  formatex( szTeam, charsmax( szTeam ), "%L", LANG_SERVER, "MSG_CS_TEAM_SPECTATOR" );
+	}
+
+	// What's our argument
+	if( szTarget[ 0 ] == '@' )
+	{
+		// Declare and define some variables
+		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount );
+
+		// No players could be targeted
+		if( !iCount )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+			return PLUGIN_HANDLED;
+		}
+
+		// Do command on players
+		for( new iLoop = 0; iLoop < iCount; iLoop ++ )
+		{
+			// Save into a variable to prevent re-indexing
+			temp_id = iPlayers[ iLoop ];
+
+			// Player is not in-game?
+			if( !bit_get( g_bIsConnected, temp_id ) )
+				continue;
+
+			// Skip immunity (But allow to self)!
+			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+				continue;
+
+			// Set user team
+			if( iTeam == CS_TEAM_SPECTATOR )
+			{
+				// Move player to new team
+				cs_set_user_team( temp_id, iTeam );
+
+				// Kill player if alive, spectators are dead :P
+				if( bit_get( g_bIsAlive, temp_id ) )
+					user_kill( temp_id, 1 );
+			}
+			else
+			{
+				// Move player to new team
+				cs_set_user_team( temp_id, iTeam );
+
+				// Revive player if alraedy alive, so they get spawned in team spawn
+				if( bit_get( g_bIsAlive, temp_id ) )
+					ExecuteHamB( Ham_CS_RoundRespawn, temp_id );
+			}
+		}
+
+		switch( iTargetTeam )
+		{
+			// All?
+			case ACT_ALL:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
+					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Transferred ALL to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+			}
+
+			// Terrorists?
+			case ACT_T:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
+					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Transferred TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+			}
+
+			// Counter-Terrorists?
+			case ACT_CT:
+			{
+				// Notice message format
+				switch( g_iShowActivity )
+				{
+					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
+					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+				}
+
+				// Log administrative action
+				Log( "ADMIN %s <%s><%s> - Transferred COUNTER-TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+			}
+		}
+	}
+	else
+	{
+		// Define a single player target id
+		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF );
+
+		// Validate player
+		if( !is_user_valid_connected( temp_id ) )
+			return PLUGIN_HANDLED;
+
+		// Set user team
+		if( iTeam == CS_TEAM_SPECTATOR )
+		{
+			// Move player to new team
+			cs_set_user_team( temp_id, iTeam );
+
+			// Kill player if alive, spectators are dead :P
+			if( bit_get( g_bIsAlive, temp_id ) )
+				user_kill( temp_id, 1 );
+		}
+		else
+		{
+			// Move player to new team
+			cs_set_user_team( temp_id, iTeam );
+
+			// Revive player if alraedy alive, so they get spawned in team spawn
+			if( bit_get( g_bIsAlive, temp_id ) )
+				ExecuteHamB( Ham_CS_RoundRespawn, temp_id );
+		}
+
+		// Notice message format
+		switch( g_iShowActivity )
+		{
+			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+		}
+
+		// Log administrative action
+		Log( "ADMIN %s <%s><%s> - Transferred %s <%s><%s> to %s team", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ), szTeam );
 	}
 
 	return PLUGIN_HANDLED;
@@ -885,6 +1200,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 		case ACTS_NO: szFlags = "e";
 		case ACTS_BOTS: szFlags = "ce";
 		case ACTS_DEAD: szFlags = "ae";
+		case ACTS_ALIVE: szFlags = "be";
 	}
 
 	// Execute command on all players?
@@ -896,6 +1212,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 			case ACTS_NO: szFlags = "";
 			case ACTS_BOTS: szFlags = "c";
 			case ACTS_DEAD: szFlags = "a";
+			case ACTS_ALIVE: szFlags = "b";
 		}
 
 		// Set target team to ALL!
