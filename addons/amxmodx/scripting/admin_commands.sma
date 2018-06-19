@@ -7,6 +7,8 @@
 	(c) 2018 - Taurus
 	Website: https://genjero.com
 
+	Error: FATAL ERROR (shutting down): IndexOfEdict: bad entity
+
 =========================================================================== */
 
 // Includes
@@ -21,7 +23,7 @@
 #pragma semicolon 1;
 
 // Turns stuff into bitsums
-#define turn_into_bit(%1)	( 1 << %1 )
+#define turn_into_bit(%1)	( 1 << ( %1 ) )
 
 // Bitsums!
 #define bit_set(%1,%2)	( %1 |= turn_into_bit( %2 - 1 ) )
@@ -29,21 +31,15 @@
 #define bit_get(%1,%2)	( %1 & turn_into_bit( %2 - 1 ) )
 
 // Checks whether a player is valid or not
-#define is_user_valid(%1)			( 1 <= %1 <= g_iMaxPlayers )
+#define is_user_valid(%1)			( 1 <= %1 <= MaxClients )
 #define is_user_valid_connected(%1)	( is_user_valid( %1 ) && bit_get( g_bIsConnected, %1 ) )
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.4"
+#define PLUGIN_VERSION	"1.0.5"
 
-// Chat colours
-enum ( )
-{
-	print_colour_default = 0,
-	print_colour_grey = 33,
-	print_colour_red,
-	print_colour_blue
-};
+// Prefix for the plugin
+// #define PLUGIN_PREFIX "^1[^4AC^1]"
 
 // Authentication information - Function: GetAuthenticationInfo( )
 enum _:AuthenticationInfo( )
@@ -71,7 +67,6 @@ enum ( )
 };
 
 // Integers
-new g_iMaxPlayers;
 new g_iShowActivity;
 
 // Bitsums
@@ -98,9 +93,9 @@ public plugin_init( )
 		- If minor version number changes, only beta resets to 0
 		- If beta version number changes, nothing resets
 
-		This plugin supports only AMX Mod X 1.8.2, so compiling this plugin
-		with AMX Mod X 1.8.3 compiler will throw serious errors, and I will
-		not support it, unless a feature in my plugin requires it!
+		This plugin supports only AMX Mod X 1.8.3, so compiling this plugin
+		with AMX Mod X 1.8.2 compiler will throw serious errors, and I will
+		not support it!
 
 		-----------------
 		-*- Changelog -*-
@@ -131,6 +126,9 @@ public plugin_init( )
 		- Fixed bug with infinite godmode not set immediately
 		- Updated 'GetTeamTarget( )' to also skip alive players
 
+		v1.0.5 - Beta release - 19-06-2018 / Tuesday (In Development)
+		- Added AMX Mod X 1.8.3 support, now the plugin won't support 1.8.2
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -158,13 +156,22 @@ public plugin_init( )
 		Date: 07-06-2018 - Day: Thursday
 		[ + ] Update noclip command to be set until disabled (v1.0.3)
 		[ + ] Update godmode command to be set until disabled (v1.0.3)
-		[ * ] Add the command "ac_revive" - ADMIN_LEVEL_A (v1.0.4)
-		[ * ] Add the command "ac_transfer" - ADMIN_LEVEL_A (v1.0.4)
-		[ - ] Add the command "ac_spectate" - ADMIN_LEVEL_A
+		[ + ] Add the command "ac_revive" - ADMIN_LEVEL_A (v1.0.4)
+		[ + ] Add the command "ac_transfer" - ADMIN_LEVEL_A (v1.0.4)
+		[ x ] Add the command "ac_spectate" - ADMIN_LEVEL_A
 
 		Date: 08-06-2018 - Day: Friday
 		[ + ] Fix bug with infinite noclip not set immediately (v1.0.4)
 		[ + ] Fix bug with infinite godmode not set immediately (v1.0.4)
+
+		Date: 14-06-2018 - Day: Thursday
+		[ - ] Add the command "ac_swap" - ADMIN_LEVEL_A
+		[ - ] Add the command "ac_teamswap" - ADMIN_LEVEL_A
+		[ - ] Add the command "ac_glow" - ADMIN_LEVEL_A
+		[ - ] Add the command "ac_slay" - ADMIN_LEVEL_B
+		[ - ] Add the command "ac_autoslay" - ADMIN_LEVEL_B
+		[ - ] Add the command "ac_exec" - ADMIN_LEVEL_B
+		[ - ] Add the command "ac_restart" - ADMIN_LEVEL_B
 
 	=========================================================================== */
 
@@ -176,10 +183,7 @@ public plugin_init( )
 	set_cvar_string( "ac_version", PLUGIN_VERSION );
 
 	// Register dictionary
-	register_dictionary_colour( "admin_commands.txt" );
-
-	// Get maximum players (counting purposes :P)
-	g_iMaxPlayers = get_maxplayers( );
+	register_dictionary_color( "admin_commands.txt" );
 
 	// Console commands
 	register_concmd( "ac_health", "ConCmd_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
@@ -191,16 +195,16 @@ public plugin_init( )
 	register_concmd( "ac_transfer", "ConCmd_Transfer", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <T | CT | SPEC>" );
 
 	// Hamsandwich
-	RegisterHam( Ham_Spawn, "player", "fw_Spawn_Post", true );
-	RegisterHam( Ham_Killed, "player", "fw_Killed_Pre" );
+	RegisterHamPlayer( Ham_Spawn, "fw_Spawn_Post", true );
+	RegisterHamPlayer( Ham_Killed, "fw_Killed_Pre" );
 }
 
 public plugin_cfg( )
 {
-	// Retrieve show activity
+	// Get cvar pointer
 	new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
 
-	// Is this cvar enabled or even exists?
+	// Does not exist?
 	if( cvar_show_activity == 0 )
 	{
 		// Register it
@@ -224,7 +228,7 @@ public client_putinserver( id )
 	bit_del( g_bHasInfiniteGodmode, id );
 }
 
-public client_disconnect( id )
+public client_disconnected( id )
 {
 	// Clear bitsum
 	bit_del( g_bIsConnected, id );
@@ -251,7 +255,7 @@ public ConCmd_Health( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
 
 		// No players could be targeted
 		if( !iCount )
@@ -289,8 +293,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -303,8 +307,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -317,8 +321,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -344,8 +348,8 @@ public ConCmd_Health( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -373,7 +377,7 @@ public ConCmd_Armour( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
 
 		// No players could be targeted
 		if( !iCount )
@@ -411,8 +415,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -425,8 +429,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -439,8 +443,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -466,8 +470,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -495,7 +499,7 @@ public ConCmd_Money( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_BOTS );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_BOTS );
 
 		// No players could be targeted
 		if( !iCount )
@@ -533,8 +537,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -547,8 +551,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -561,8 +565,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -588,8 +592,8 @@ public ConCmd_Money( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -617,7 +621,7 @@ public ConCmd_Noclip( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
 
 		// No players could be targeted
 		if( !iCount )
@@ -658,8 +662,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -672,8 +676,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -686,8 +690,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -716,8 +720,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -745,7 +749,7 @@ public ConCmd_Godmode( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
 
 		// No players could be targeted
 		if( !iCount )
@@ -786,8 +790,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -800,8 +804,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -814,8 +818,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -844,8 +848,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -869,7 +873,7 @@ public ConCmd_Revive( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_ALIVE );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_ALIVE );
 
 		// No players could be targeted
 		if( !iCount )
@@ -904,8 +908,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -918,8 +922,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -932,8 +936,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -963,8 +967,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -1025,7 +1029,7 @@ public ConCmd_Transfer( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ 32 ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount );
+		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount );
 
 		// No players could be targeted
 		if( !iCount )
@@ -1077,8 +1081,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
-					case 2: client_print_colour( 0, print_colour_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1091,8 +1095,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
-					case 2: client_print_colour( 0, print_colour_red, "%L", LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1105,8 +1109,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
-					case 2: client_print_colour( 0, print_colour_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1146,8 +1150,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
-			case 2: client_print_colour( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
 		}
 
 		// Log administrative action
@@ -1189,18 +1193,18 @@ public fw_Killed_Pre( victim_id, attacker_id )
 	bit_del( g_bIsAlive, victim_id );
 }
 
-GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
+GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO )
 {
 	// Declare variables
-	new iTargetTeam, szFlags[ 4 ];
+	new GetPlayersFlags:iFlags, iTargetTeam;
 
 	// Check skip mode
 	switch( iSkip )
 	{
-		case ACTS_NO: szFlags = "e";
-		case ACTS_BOTS: szFlags = "ce";
-		case ACTS_DEAD: szFlags = "ae";
-		case ACTS_ALIVE: szFlags = "be";
+		case ACTS_NO: iFlags = GetPlayers_MatchTeam;
+		case ACTS_BOTS: iFlags = GetPlayers_ExcludeBots | GetPlayers_MatchTeam;
+		case ACTS_DEAD: iFlags = GetPlayers_ExcludeDead | GetPlayers_MatchTeam;
+		case ACTS_ALIVE: iFlags = GetPlayers_ExcludeAlive | GetPlayers_MatchTeam;
 	}
 
 	// Execute command on all players?
@@ -1209,17 +1213,17 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 		// Update skip mode
 		switch( iSkip )
 		{
-			case ACTS_NO: szFlags = "";
-			case ACTS_BOTS: szFlags = "c";
-			case ACTS_DEAD: szFlags = "a";
-			case ACTS_ALIVE: szFlags = "b";
+			case ACTS_NO: iFlags = GetPlayers_None;
+			case ACTS_BOTS: iFlags = GetPlayers_ExcludeBots;
+			case ACTS_DEAD: iFlags = GetPlayers_ExcludeDead;
+			case ACTS_ALIVE: iFlags = GetPlayers_ExcludeAlive;
 		}
 
 		// Set target team to ALL!
 		iTargetTeam = ACT_ALL;
 
 		// Count all players with skip flags
-		get_players( iPlayers, iCount, szFlags );
+		get_players_ex( iPlayers, iCount, iFlags );
 	}
 
 	// Execute command on terrorists?
@@ -1229,7 +1233,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 		iTargetTeam = ACT_T;
 
 		// Count all players in terrorist team with skip flags
-		get_players( iPlayers, iCount, szFlags, "TERRORIST" );
+		get_players_ex( iPlayers, iCount, iFlags, "TERRORIST" );
 	}
 
 	// Execute command on COUNTER-TERRORISTS
@@ -1239,7 +1243,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ 32 ], &iCount, iSkip = ACTS_NO )
 		iTargetTeam = ACT_CT;
 
 		// Count all players in counter-terrorist team with skip flags
-		get_players( iPlayers, iCount, szFlags, "CT" );
+		get_players_ex( iPlayers, iCount, iFlags, "CT" );
 	}
 
 	// Return target team value
@@ -1282,200 +1286,62 @@ Log( const szFormat[ ], any:... )
 	log_to_file( szFileName, "%s", szMessage );
 }
 
-// Prefix for the plugin
-#define PLUGIN_PREFIX "^1[^4AC^1]"
-
-// Prints a coloured say text message
-client_print_colour( id, colour_id, const szFormat[ ], any:... )
-{
-	if( id && !is_user_valid_connected( id ) )
-		return false;
-	
-	static const szTeam[ ][ ] =
-	{
-		"",
-		"TERRORIST",
-		"CT"
-	};
-	
-	new szMessage[ 192 ], iParameters = numargs( );
-
-	if( id )
-	{
-		if( iParameters == 3 )
-		{
-			copy( szMessage, charsmax( szMessage ), szFormat );
-			format( szMessage, charsmax( szMessage ), "%s %s", PLUGIN_PREFIX, szMessage );
-		}
-		else
-		{
-			vformat( szMessage, charsmax( szMessage ), szFormat, 4 );
-			format( szMessage, charsmax( szMessage ), "%s %s", PLUGIN_PREFIX, szMessage );
-		}
-		
-		if( colour_id > print_colour_grey )
-		{
-			if( colour_id > print_colour_blue )
-				colour_id = id;
-			else
-				send_team_info( id, colour_id, szTeam[ colour_id - print_colour_grey ] );
-		}
-		
-		send_say_text( id, colour_id, szMessage );
-	}
-	else
-	{
-		new iPlayers[ 32 ], iCount;
-		get_players( iPlayers, iCount, "ch" );
-		
-		if( !iCount )
-			return false;
-		
-		new iMLCount, iLoop, iInnerLoop;
-		new Array:aStoreML = ArrayCreate( );
-		
-		if( iParameters >= 5 )
-		{
-			for( iInnerLoop = 3; iInnerLoop < iParameters; iInnerLoop ++ )
-			{
-				if( getarg( iInnerLoop ) == LANG_PLAYER )
-				{
-					iLoop = 0;
-					
-					while( ( szMessage[ iLoop ] = getarg( iInnerLoop + 1, iLoop ++ ) ) ) { }
-					
-					if( GetLangTransKey( szMessage ) != TransKey_Bad )
-					{
-						ArrayPushCell( aStoreML, iInnerLoop ++ );
-						iMLCount ++;
-					}
-				}
-			}
-		}
-		
-		if( !iMLCount )
-		{
-			if( iParameters == 3 )
-			{
-				copy( szMessage, charsmax( szMessage ), szFormat );
-				format( szMessage, charsmax( szMessage ), "%s %s", PLUGIN_PREFIX, szMessage );
-			}
-			else
-			{
-				vformat( szMessage, charsmax( szMessage ), szFormat, 4 );
-				format( szMessage, charsmax( szMessage ), "%s %s", PLUGIN_PREFIX, szMessage );
-			}
-			
-			if( 0 < colour_id < print_colour_blue )
-			{
-				if( colour_id > print_colour_grey )
-					send_team_info( 0, colour_id, szTeam[ colour_id - print_colour_grey ] );
-				
-				send_say_text( 0, colour_id, szMessage );
-				return true;
-			}
-		}
-		
-		if( colour_id > print_colour_blue )
-			colour_id = 0;
-		
-		for( -- iCount; iCount >= 0; iCount -- )
-		{
-			id = iPlayers[ iCount ];
-			
-			if( iMLCount )
-			{
-				for( iInnerLoop = 0; iInnerLoop < iMLCount; iInnerLoop++ )
-					setarg( ArrayGetCell( aStoreML, iInnerLoop ), _, id );
-				
-				vformat( szMessage, charsmax( szMessage ), szFormat, 4 );
-				format( szMessage, charsmax( szMessage ), "%s %s", PLUGIN_PREFIX, szMessage );
-			}
-			
-			if( colour_id > print_colour_grey )
-				send_team_info( id, colour_id, szTeam[ colour_id - print_colour_grey ] );
-			
-			send_say_text( id, colour_id, szMessage );
-		}
-		
-		ArrayDestroy( aStoreML );
-	}
-	
-	return true;
-}
-
-// Sends a team info message
-send_team_info( receiver_id, sender_id, szTeam[ ] )
-{
-	static msgTeamInfo;
-
-	if( !msgTeamInfo )
-		msgTeamInfo = get_user_msgid( "TeamInfo" );
-	
-	message_begin( receiver_id ? MSG_ONE : MSG_ALL, msgTeamInfo, _, receiver_id );
-	write_byte( sender_id );
-	write_string( szTeam );
-	message_end( );
-}
-
-// Sends a say text message
-send_say_text( receiver_id, sender_id, szMessage[ ] )
-{
-	static msgSayText;
-
-	if( !msgSayText )
-		msgSayText = get_user_msgid( "SayText" );
-	
-	message_begin( receiver_id ? MSG_ONE : MSG_ALL, msgSayText, _, receiver_id );
-	write_byte( sender_id ? sender_id : receiver_id );
-	write_string( szMessage );
-	message_end( );
-}
-
 // Registers a coloured dictionary
-register_dictionary_colour( const szFileName[ ] )
+register_dictionary_color( const szFileName[ ] )
 {
+	// Could not register dictionary with this file name
 	if( !register_dictionary( szFileName ) )
 		return false;
 
-	new szDirectory[ 128 ];
-	get_localinfo( "amxx_datadir", szDirectory, charsmax( szDirectory ) );
-	format( szDirectory, charsmax( szDirectory ), "%s/lang/%s", szDirectory, szFileName );
+	// Format language directory
+	new szData[ 128 ];
+	get_localinfo( "amxx_datadir", szData, charsmax( szData ) );
+	format( szData, charsmax( szData ), "%s/lang/%s", szData, szFileName );
 
-	new iFile = fopen( szDirectory, "rt" );
+	// Open up our file
+	new iFile = fopen( szData, "rt" );
 
+	// Could not open our file!
 	if( !iFile )
 	{
-		log_amx( "[AMXX] Failed to open file: %s", szDirectory );
+		// Log with AMXX, because this stock is not really associated with Jailbreak :D
+		log_amx( "[AMXX] Failed to open file: %s", szData );
 		return false;
 	}
 
+	// Declare some variables that will be useful soon!
 	new TransKey:iKey, buffer[ 512 ], szLanguage[ 3 ], szKey[ 64 ], szTranslation[ 256 ];
 
+	// Read our file until the end line by line!
 	while( iFile && !feof( iFile ) )
 	{
+		// Get file file's lines and trim spaces
 		fgets( iFile, buffer, charsmax( buffer ) );
 		trim( buffer );
 
+		// If it is a language key section see what is it! Otherwise see translations
 		if( buffer[ 0 ] == '[' )
 			strtok( buffer[ 1 ], szLanguage, charsmax( szLanguage ), buffer, 1, ']' );
 		else if( buffer[ 0 ] )
 		{
-			strbreak( buffer, szKey, charsmax( szKey ), szTranslation, charsmax( szTranslation ) );
+			argbreak( buffer, szKey, charsmax( szKey ), szTranslation, charsmax( szTranslation ) );
 
 			iKey = GetLangTransKey( szKey );
 
 			if( iKey != TransKey_Bad )
 			{
+				// Replace colour tags by colour codes
 				while( replace( szTranslation, charsmax( szTranslation ), "!g", "^4" ) ) { /* Keep Looping! */ }
 				while( replace( szTranslation, charsmax( szTranslation ), "!t", "^3" ) ) { /* Keep Looping! */ }
 				while( replace( szTranslation, charsmax( szTranslation ), "!n", "^1" ) ) { /* Keep Looping! */ }
 
+				// Add translation
 				AddTranslation( szLanguage, iKey, szTranslation[ 2 ] );
 			}
 		}
 	}
 
+	// Close file after we finish translation and colourisation
 	fclose( iFile );
 	return true;
 }
