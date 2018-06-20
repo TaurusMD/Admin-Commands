@@ -7,8 +7,6 @@
 	(c) 2018 - Taurus
 	Website: https://genjero.com
 
-	Error: FATAL ERROR (shutting down): IndexOfEdict: bad entity
-
 =========================================================================== */
 
 // Includes
@@ -36,10 +34,10 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.5"
+#define PLUGIN_VERSION	"1.0.6"
 
 // Prefix for the plugin
-// #define PLUGIN_PREFIX "^1[^4AC^1]"
+#define PLUGIN_PREFIX "^1[^4AC^1]"
 
 // Authentication information - Function: GetAuthenticationInfo( )
 enum _:AuthenticationInfo( )
@@ -128,6 +126,10 @@ public plugin_init( )
 
 		v1.0.5 - Beta release - 19-06-2018 / Tuesday (In Development)
 		- Added AMX Mod X 1.8.3 support, now the plugin won't support 1.8.2
+
+		v1.0.6 - Beta release - 20-06-2018 / Wednesday (In Development)
+		- Stablised plugin, it will not cause problems with your server
+		- Fixed typos in the chat messages
 
 	=========================================================================== */
 
@@ -293,8 +295,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -307,8 +309,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -321,8 +323,8 @@ public ConCmd_Health( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
 				}
 
 				// Log administrative action
@@ -348,8 +350,8 @@ public ConCmd_Health( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -415,8 +417,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -429,8 +431,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -443,8 +445,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
 				}
 
 				// Log administrative action
@@ -470,8 +472,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -537,8 +539,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -551,8 +553,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -565,8 +567,8 @@ public ConCmd_Money( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
 				}
 
 				// Log administrative action
@@ -592,8 +594,8 @@ public ConCmd_Money( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -662,8 +664,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -676,8 +678,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -690,8 +692,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
 				}
 
 				// Log administrative action
@@ -720,8 +722,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -790,8 +792,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -804,8 +806,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -818,8 +820,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
 				}
 
 				// Log administrative action
@@ -848,8 +850,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -908,8 +910,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -922,8 +924,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -936,8 +938,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
 				}
 
 				// Log administrative action
@@ -967,8 +969,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
 		}
 
 		// Log administrative action
@@ -1081,8 +1083,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_default, "%L", LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1095,8 +1097,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_red, "%L", LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1109,8 +1111,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 				// Notice message format
 				switch( g_iShowActivity )
 				{
-					case 1: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_blue, "%L", LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
 				}
 
 				// Log administrative action
@@ -1150,8 +1152,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
-			case 2: client_print_color( 0, temp_id, "%L", LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
 		}
 
 		// Log administrative action
@@ -1304,7 +1306,6 @@ register_dictionary_color( const szFileName[ ] )
 	// Could not open our file!
 	if( !iFile )
 	{
-		// Log with AMXX, because this stock is not really associated with Jailbreak :D
 		log_amx( "[AMXX] Failed to open file: %s", szData );
 		return false;
 	}
@@ -1324,6 +1325,7 @@ register_dictionary_color( const szFileName[ ] )
 			strtok( buffer[ 1 ], szLanguage, charsmax( szLanguage ), buffer, 1, ']' );
 		else if( buffer[ 0 ] )
 		{
+			// strbreak( buffer, szKey, charsmax( szKey ), szTranslation, charsmax( szTranslation ) );
 			argbreak( buffer, szKey, charsmax( szKey ), szTranslation, charsmax( szTranslation ) );
 
 			iKey = GetLangTransKey( szKey );
