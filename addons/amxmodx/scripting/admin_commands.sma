@@ -34,7 +34,7 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.6"
+#define PLUGIN_VERSION	"1.0.7"
 
 // Prefix for the plugin
 #define PLUGIN_PREFIX "^1[^4AC^1]"
@@ -131,6 +131,9 @@ public plugin_init( )
 		- Stablised plugin, it will not cause problems with your server
 		- Fixed typos in the chat messages
 
+		v1.0.7 - Beta release - 22-06-2018 / Friday (In Development)
+		- Added support for the old folks "amx_" prefix for the commands
+
 	=========================================================================== */
 
 	/* ===========================================================================
@@ -196,6 +199,15 @@ public plugin_init( )
 	register_concmd( "ac_revive", "ConCmd_Revive", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team>" );
 	register_concmd( "ac_transfer", "ConCmd_Transfer", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <T | CT | SPEC>" );
 
+	// Old folks support
+	register_concmd( "amx_health", "ConCmd_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
+	register_concmd( "amx_armour", "ConCmd_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
+	register_concmd( "amx_money", "ConCmd_Money", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#Money>" );
+	register_concmd( "amx_noclip", "ConCmd_Noclip", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "amx_godmode", "ConCmd_Godmode", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <0 | 1 | 2>" );
+	register_concmd( "amx_revive", "ConCmd_Revive", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team>" );
+	register_concmd( "amx_transfer", "ConCmd_Transfer", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <T | CT | SPEC>" );
+
 	// Hamsandwich
 	RegisterHamPlayer( Ham_Spawn, "fw_Spawn_Post", true );
 	RegisterHamPlayer( Ham_Killed, "fw_Killed_Pre" );
@@ -204,19 +216,22 @@ public plugin_init( )
 public plugin_cfg( )
 {
 	// Get cvar pointer
-	new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
+	// new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
 
 	// Does not exist?
-	if( cvar_show_activity == 0 )
-	{
+	// if( cvar_show_activity == 0 )
+	// {
 		// Register it
-		cvar_show_activity = register_cvar( "amx_show_activity", "2" );
+		// cvar_show_activity = register_cvar( "amx_show_activity", "2" );
 
 		// Cache it
-		g_iShowActivity = get_pcvar_num( cvar_show_activity );
-	}
-	else
-		g_iShowActivity = get_pcvar_num( cvar_show_activity );
+		// g_iShowActivity = get_pcvar_num( cvar_show_activity );
+	// }
+	// else
+		// g_iShowActivity = get_pcvar_num( cvar_show_activity );
+
+	// This one over here is experimental, but should work
+	bind_pcvar_num( get_cvar_pointer( "amx_show_activity" ), g_iShowActivity );
 }
 
 public client_putinserver( id )
