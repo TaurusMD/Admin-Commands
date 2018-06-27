@@ -34,38 +34,49 @@
 #define is_user_valid_alive(%1)		( is_user_valid( %1 ) && bit_get( g_bIsAlive, %1 ) )
 
 // Version details is in the plugin_init( ) comment block before plugin registration
-#define PLUGIN_VERSION	"1.0.7"
+#define PLUGIN_VERSION	"1.1.0"
 
 // Prefix for the plugin
 #define PLUGIN_PREFIX "^1[^4AC^1]"
 
 // Authentication information - Function: GetAuthenticationInfo( )
-enum _:AuthenticationInfo( )
+enum AuthenticationInfo ( )
 {
-	AI_NAME = 0,
-	AI_AUTHID,
-	AI_IP
+	AuthenticationInfo_Name = 0,			// Returns player's name
+	AuthenticationInfo_AuthID,				// Returns player's auth ID (SteamID, ValveID)
+	AuthenticationInfo_IP					// Returns player's IP
 };
 
 // Admin command target
-enum ( )
+enum AdminCommandTarget ( )
 {
-	ACT_ALL = 0,
-	ACT_T,
-	ACT_CT
+	AdminCommandTarget_All = 0,				// Targets all players for a certain command
+	AdminCommandTarget_Terrorist,			// Targets terrorists for a certain command
+	AdminCommandTarget_CT					// Targets counter-terrorists for a certain command
 };
 
 // Admin command target skip
-enum ( )
+enum AdminCommandTargetSkip ( )
 {
-	ACTS_NO = 0,
-	ACTS_BOTS,
-	ACTS_DEAD,
-	ACTS_ALIVE
+	AdminCommandTargetSkip_None = 0,		// Skips no one
+	AdminCommandTargetSkip_Bots,			// Skips bots
+	AdminCommandTargetSkip_Dead,			// Skips dead players
+	AdminCommandTargetSkip_Alive			// Skips alive players
+};
+
+// Admin command target flag
+enum AdminCommandTargetFlag ( <<= 1 )
+{
+	AdminCommandTargetFlag_None = 0,		// Does not prevent using a command on a player unless player is not present
+	AdminCommandTargetFlag_Immunity = 1,	// Prevent using command on players with immunity
+	AdminCommandTargetFlag_Alive,			// Prevent using command on alive players
+	AdminCommandTargetFlag_Bots				// Prevent using command on bots
 };
 
 // Integers
 new g_iShowActivity;
+new g_iLog;
+new g_iRespawnAlive;
 
 // Bitsums
 new g_bIsConnected;
@@ -133,6 +144,15 @@ public plugin_init( )
 
 		v1.0.7 - Beta release - 22-06-2018 / Friday (In Development)
 		- Added support for the old folks "amx_" prefix for the commands
+		- Updated show activity code, now it uses "bind_pcvar_num( )" instead
+
+		v1.1.0 - Beta release - 23-06-2018 / Saturday (In Development)
+		- Added the 'GetCommandTarget( )' function to retrieve target player ID
+		- Added the 'SeekImmunitySkip( )' function for custom immunity skip
+		- Added a cvar to check whether should the plugin log commands or not
+		- Added a cvar to check whether should the plugin respawn alive or not
+		- Added a feature for noclip so players press SHIFT to gain speed
+		- Updated plugin functionality and checks in loops
 
 	=========================================================================== */
 
@@ -190,6 +210,10 @@ public plugin_init( )
 	// Register dictionary
 	register_dictionary_color( "admin_commands.txt" );
 
+	// Plugin cvars :D
+	bind_pcvar_num( register_cvar( "ac_log", "1" ), g_iLog );
+	bind_pcvar_num( register_cvar( "ac_respawn_alive", "1" ), g_iRespawnAlive );
+
 	// Console commands
 	register_concmd( "ac_health", "ConCmd_Health", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#HP>" );
 	register_concmd( "ac_armour", "ConCmd_Armour", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <#AP>" );
@@ -208,6 +232,9 @@ public plugin_init( )
 	register_concmd( "amx_revive", "ConCmd_Revive", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team>" );
 	register_concmd( "amx_transfer", "ConCmd_Transfer", ADMIN_LEVEL_A, "<nick | #user_id | auth_id | @team> <T | CT | SPEC>" );
 
+	// Fakemeta forward
+	register_forward( FM_CmdStart, "fw_CmdStart" );
+
 	// Hamsandwich
 	RegisterHamPlayer( Ham_Spawn, "fw_Spawn_Post", true );
 	RegisterHamPlayer( Ham_Killed, "fw_Killed_Pre" );
@@ -215,22 +242,7 @@ public plugin_init( )
 
 public plugin_cfg( )
 {
-	// Get cvar pointer
-	// new cvar_show_activity = get_cvar_pointer( "amx_show_activity" );
-
-	// Does not exist?
-	// if( cvar_show_activity == 0 )
-	// {
-		// Register it
-		// cvar_show_activity = register_cvar( "amx_show_activity", "2" );
-
-		// Cache it
-		// g_iShowActivity = get_pcvar_num( cvar_show_activity );
-	// }
-	// else
-		// g_iShowActivity = get_pcvar_num( cvar_show_activity );
-
-	// This one over here is experimental, but should work
+	// Bind "amx_show_activity" value into g_iShowActivity
 	bind_pcvar_num( get_cvar_pointer( "amx_show_activity" ), g_iShowActivity );
 }
 
@@ -272,7 +284,7 @@ public ConCmd_Health( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, AdminCommandTargetSkip_Dead );
 
 		// No players could be targeted
 		if( !iCount )
@@ -291,8 +303,8 @@ public ConCmd_Health( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Get current player's health
@@ -305,52 +317,55 @@ public ConCmd_Health( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_ALL_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_health );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d HP to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d HP to ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_health, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_T_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_health );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d HP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d HP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_health, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_CT_NO_NAME", new_health );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AI_NAME ), new_health );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_health );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d HP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d HP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_health, iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity | AdminCommandTargetFlag_Alive );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -365,12 +380,13 @@ public ConCmd_Health( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER_NO_NAME", new_health, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_HEALTH_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_health, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Gave %d HP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_health, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Gave %d HP to %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_health, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -394,7 +410,7 @@ public ConCmd_Armour( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, AdminCommandTargetSkip_Dead );
 
 		// No players could be targeted
 		if( !iCount )
@@ -413,8 +429,8 @@ public ConCmd_Armour( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Get current player's armour
@@ -427,52 +443,56 @@ public ConCmd_Armour( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_ALL_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_armour );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d AP to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d AP to ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_armour, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_T_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_armour );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d AP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d AP to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_armour, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_CT_NO_NAME", new_armour );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AI_NAME ), new_armour );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_armour );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d AP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d AP to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_armour, iCount );
 			}
 		}
 	}
+
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity | AdminCommandTargetFlag_Alive );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -487,12 +507,13 @@ public ConCmd_Armour( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER_NO_NAME", new_armour, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_ARMOUR_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_armour, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Gave %d AP to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_armour, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Gave %d AP to %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_armour, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -516,7 +537,7 @@ public ConCmd_Money( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_BOTS );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, AdminCommandTargetSkip_Bots );
 
 		// No players could be targeted
 		if( !iCount )
@@ -535,8 +556,8 @@ public ConCmd_Money( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Get current player's money
@@ -549,52 +570,55 @@ public ConCmd_Money( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_ALL_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_money );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d money to ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d money to ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_money, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_T_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_money );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d money to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d money to TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_money, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_CT_NO_NAME", new_money );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AI_NAME ), new_money );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_money );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Gave %d money to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Gave %d money to COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_money, iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_NO_BOTS );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity | AdminCommandTargetFlag_Bots );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -609,12 +633,13 @@ public ConCmd_Money( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER_NO_NAME", new_money, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_MONEY_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_money, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Gave %d money to %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_money, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Gave %d money to %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_money, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -638,7 +663,7 @@ public ConCmd_Noclip( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, AdminCommandTargetSkip_Dead );
 
 		// No players could be targeted
 		if( !iCount )
@@ -657,8 +682,8 @@ public ConCmd_Noclip( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Update player's noclip
@@ -674,52 +699,55 @@ public ConCmd_Noclip( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_ALL_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_noclip );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set noclip to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set noclip to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_noclip, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_T_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_noclip );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set noclip to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set noclip to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_noclip, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_CT_NO_NAME", new_noclip );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AI_NAME ), new_noclip );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_noclip );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set noclip to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set noclip to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_noclip, iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity | AdminCommandTargetFlag_Alive );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -737,12 +765,13 @@ public ConCmd_Noclip( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER_NO_NAME", new_noclip, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_NOCLIP_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_noclip, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Set noclip to %d for %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_noclip, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Set noclip to %d for %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_noclip, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -766,7 +795,7 @@ public ConCmd_Godmode( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_DEAD );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, AdminCommandTargetSkip_Dead );
 
 		// No players could be targeted
 		if( !iCount )
@@ -785,8 +814,8 @@ public ConCmd_Godmode( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Update player's godmode
@@ -802,52 +831,55 @@ public ConCmd_Godmode( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_ALL_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_godmode );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set godmode to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set godmode to %d for ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_godmode, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_T_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_godmode );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set godmode to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set godmode to %d for TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_godmode, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_CT_NO_NAME", new_godmode );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AI_NAME ), new_godmode );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_godmode );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Set godmode to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Set godmode to %d for COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_godmode, iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF | CMDTARGET_ONLY_ALIVE );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity | AdminCommandTargetFlag_Alive );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -865,12 +897,13 @@ public ConCmd_Godmode( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER_NO_NAME", new_godmode, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_GODMODE_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), new_godmode, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Set godmode to %d for %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), new_godmode, GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Set godmode to %d for %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), new_godmode, GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -890,7 +923,7 @@ public ConCmd_Revive( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, ACTS_ALIVE );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount, g_iRespawnAlive ? AdminCommandTargetSkip_None : AdminCommandTargetSkip_Alive );
 
 		// No players could be targeted
 		if( !iCount )
@@ -909,8 +942,8 @@ public ConCmd_Revive( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Revive target!
@@ -920,61 +953,64 @@ public ConCmd_Revive( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_ALL_NO_NAME" );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AI_NAME ) );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ) );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Revived ALL (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Revived ALL (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_T_NO_NAME" );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AI_NAME ) );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ) );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Revived TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Revived TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_CT_NO_NAME" );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AI_NAME ) );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ) );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Revived COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Revived COUNTER-TERRORISTS (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
 			return PLUGIN_HANDLED;
 
 		// Player is alive? Ignore!
-		if( is_user_valid_alive( temp_id ) )
+		if( !g_iRespawnAlive && is_user_valid_alive( temp_id ) )
 		{
-			console_print( id, "%L", id, "CMD_ERROR_ALIVE", GetAuthenticationInfo( temp_id, AI_NAME ) );
+			console_print( id, "%L", id, "CMD_ERROR_ALIVE", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 			return PLUGIN_HANDLED;
 		}
 
@@ -984,12 +1020,13 @@ public ConCmd_Revive( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ) );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ) );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_REVIVE_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Revived %s <%s><%s>", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ) );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Revived %s <%s><%s>", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ) );
 	}
 
 	return PLUGIN_HANDLED;
@@ -1046,7 +1083,7 @@ public ConCmd_Transfer( id, iAccess, command_id )
 	if( szTarget[ 0 ] == '@' )
 	{
 		// Declare and define some variables
-		new iPlayers[ MAX_PLAYERS ], iCount, iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount );
+		new iPlayers[ MAX_PLAYERS ], iCount, AdminCommandTarget:iTargetTeam = GetTeamTarget( szTarget, iPlayers, iCount );
 
 		// No players could be targeted
 		if( !iCount )
@@ -1065,8 +1102,8 @@ public ConCmd_Transfer( id, iAccess, command_id )
 			if( !bit_get( g_bIsConnected, temp_id ) )
 				continue;
 
-			// Skip immunity (But allow to self)!
-			if( temp_id != id && access( temp_id, ADMIN_IMMUNITY ) )
+			// Immunity skip check
+			if( SeekImmunitySkip( id, temp_id ) )
 				continue;
 
 			// Set user team
@@ -1093,52 +1130,55 @@ public ConCmd_Transfer( id, iAccess, command_id )
 		switch( iTargetTeam )
 		{
 			// All?
-			case ACT_ALL:
+			case AdminCommandTarget_All:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_ALL_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 2: client_print_color( 0, print_team_default, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_ALL", GetAuthenticationInfo( id, AuthenticationInfo_Name ), szTeam );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Transferred ALL to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Transferred ALL to %s team (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), szTeam, iCount );
 			}
 
 			// Terrorists?
-			case ACT_T:
+			case AdminCommandTarget_Terrorist:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_T_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 2: client_print_color( 0, print_team_red, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_T", GetAuthenticationInfo( id, AuthenticationInfo_Name ), szTeam );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Transferred TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Transferred TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), szTeam, iCount );
 			}
 
 			// Counter-Terrorists?
-			case ACT_CT:
+			case AdminCommandTarget_CT:
 			{
 				// Notice message format
 				switch( g_iShowActivity )
 				{
 					case 1: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_CT_NO_NAME", szTeam );
-					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AI_NAME ), szTeam );
+					case 2: client_print_color( 0, print_team_blue, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_CT", GetAuthenticationInfo( id, AuthenticationInfo_Name ), szTeam );
 				}
 
 				// Log administrative action
-				Log( "ADMIN %s <%s><%s> - Transferred COUNTER-TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), szTeam, iCount );
+				if( g_iLog )
+					Log( "ADMIN %s <%s><%s> - Transferred COUNTER-TERRORISTS to %s team (Players: %d)", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), szTeam, iCount );
 			}
 		}
 	}
 	else
 	{
 		// Define a single player target id
-		temp_id = cmd_target( id, szTarget, CMDTARGET_OBEY_IMMUNITY | CMDTARGET_ALLOW_SELF );
+		temp_id = GetCommandTarget( id, szTarget, AdminCommandTargetFlag_Immunity );
 
 		// Validate player
 		if( !is_user_valid_connected( temp_id ) )
@@ -1167,15 +1207,62 @@ public ConCmd_Transfer( id, iAccess, command_id )
 		// Notice message format
 		switch( g_iShowActivity )
 		{
-			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
-			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_NAME ), szTeam );
+			case 1: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER_NO_NAME", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), szTeam );
+			case 2: client_print_color( 0, temp_id, "%s %L", PLUGIN_PREFIX, LANG_SERVER, "CMD_TRANSFER_PLAYER", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), szTeam );
 		}
 
 		// Log administrative action
-		Log( "ADMIN %s <%s><%s> - Transferred %s <%s><%s> to %s team", GetAuthenticationInfo( id, AI_NAME ), GetAuthenticationInfo( id, AI_AUTHID ), GetAuthenticationInfo( id, AI_IP ), GetAuthenticationInfo( temp_id, AI_NAME ), GetAuthenticationInfo( temp_id, AI_AUTHID ), GetAuthenticationInfo( temp_id, AI_IP ), szTeam );
+		if( g_iLog )
+			Log( "ADMIN %s <%s><%s> - Transferred %s <%s><%s> to %s team", GetAuthenticationInfo( id, AuthenticationInfo_Name ), GetAuthenticationInfo( id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( id, AuthenticationInfo_IP ), GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ), GetAuthenticationInfo( temp_id, AuthenticationInfo_AuthID ), GetAuthenticationInfo( temp_id, AuthenticationInfo_IP ), szTeam );
 	}
 
 	return PLUGIN_HANDLED;
+}
+
+public fw_CmdStart( id, iHandle )
+{
+	// Player is not alive, or does not have noclip or is not moving forward? Ignore
+	if( !is_user_valid_alive( id ) || !get_user_noclip( id ) || !( pev( id, pev_button ) & IN_FORWARD ) )
+		return FMRES_IGNORED;
+	
+	// Get some move stuff
+	static Float:fForward, Float:fSide;
+	get_uc( iHandle, UC_ForwardMove, fForward );
+	get_uc( iHandle, UC_SideMove, fSide );
+	
+	// Not moving? Ignore
+	if( fForward == 0.0 && fSide == 0.0 )
+		return FMRES_IGNORED;
+	
+	// Get maximum speed
+	static Float:fMaxSpeed, Float:fWalkSpeed;
+	pev( id, pev_maxspeed, fMaxSpeed );
+
+	// Calculate walking speed
+	fWalkSpeed = fMaxSpeed * 0.52;
+	
+	// Do some checks and calculations :D
+	if( floatabs( fForward ) <= fWalkSpeed && floatabs( fSide ) <= fWalkSpeed )
+	{
+		// Get origin and view angle
+		static Float:fOrigin[ 3 ], Float:fAngle[ 3 ];
+		pev( id, pev_origin, fOrigin );
+		pev( id, pev_v_angle, fAngle );
+		
+		// Get vectors
+		engfunc( EngFunc_MakeVectors, fAngle );
+		global_get( glb_v_forward, fAngle );
+		
+		// Calculate new origin
+		fOrigin[ 0 ] += fAngle[ 0 ] * 7.5;
+		fOrigin[ 1 ] += fAngle[ 1 ] * 7.5;
+		fOrigin[ 2 ] += fAngle[ 2 ] * 7.5;
+		
+		// Set player's new origin
+		engfunc( EngFunc_SetOrigin, id, fOrigin );
+	}
+	
+	return FMRES_IGNORED;
 }
 
 public fw_Spawn_Post( id )
@@ -1210,18 +1297,18 @@ public fw_Killed_Pre( victim_id, attacker_id )
 	bit_del( g_bIsAlive, victim_id );
 }
 
-GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO )
+AdminCommandTarget:GetTeamTarget( const szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, AdminCommandTargetSkip:iSkip = AdminCommandTargetSkip_None )
 {
 	// Declare variables
-	new GetPlayersFlags:iFlags, iTargetTeam;
+	new GetPlayersFlags:iFlags, AdminCommandTarget:iTargetTeam;
 
 	// Check skip mode
 	switch( iSkip )
 	{
-		case ACTS_NO: iFlags = GetPlayers_MatchTeam;
-		case ACTS_BOTS: iFlags = GetPlayers_ExcludeBots | GetPlayers_MatchTeam;
-		case ACTS_DEAD: iFlags = GetPlayers_ExcludeDead | GetPlayers_MatchTeam;
-		case ACTS_ALIVE: iFlags = GetPlayers_ExcludeAlive | GetPlayers_MatchTeam;
+		case AdminCommandTargetSkip_None: iFlags = GetPlayers_MatchTeam;
+		case AdminCommandTargetSkip_Bots: iFlags = GetPlayers_ExcludeBots | GetPlayers_MatchTeam;
+		case AdminCommandTargetSkip_Dead: iFlags = GetPlayers_ExcludeDead | GetPlayers_MatchTeam;
+		case AdminCommandTargetSkip_Alive: iFlags = GetPlayers_ExcludeAlive | GetPlayers_MatchTeam;
 	}
 
 	// Execute command on all players?
@@ -1230,14 +1317,14 @@ GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO 
 		// Update skip mode
 		switch( iSkip )
 		{
-			case ACTS_NO: iFlags = GetPlayers_None;
-			case ACTS_BOTS: iFlags = GetPlayers_ExcludeBots;
-			case ACTS_DEAD: iFlags = GetPlayers_ExcludeDead;
-			case ACTS_ALIVE: iFlags = GetPlayers_ExcludeAlive;
+			case AdminCommandTargetSkip_None: iFlags = GetPlayers_None;
+			case AdminCommandTargetSkip_Bots: iFlags = GetPlayers_ExcludeBots;
+			case AdminCommandTargetSkip_Dead: iFlags = GetPlayers_ExcludeDead;
+			case AdminCommandTargetSkip_Alive: iFlags = GetPlayers_ExcludeAlive;
 		}
 
 		// Set target team to ALL!
-		iTargetTeam = ACT_ALL;
+		iTargetTeam = AdminCommandTarget_All;
 
 		// Count all players with skip flags
 		get_players_ex( iPlayers, iCount, iFlags );
@@ -1247,7 +1334,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO 
 	if( equali( szArgument[ 1 ], "TERRORIST", strlen( szArgument[ 1 ] ) ) )
 	{
 		// Set target team to TERRORISTS
-		iTargetTeam = ACT_T;
+		iTargetTeam = AdminCommandTarget_Terrorist;
 
 		// Count all players in terrorist team with skip flags
 		get_players_ex( iPlayers, iCount, iFlags, "TERRORIST" );
@@ -1257,7 +1344,7 @@ GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO 
 	if( equali( szArgument[ 1 ], "CT", strlen( szArgument[ 1 ] ) ) )
 	{
 		// Set target team to COUNTER-TERRORISTS
-		iTargetTeam = ACT_CT;
+		iTargetTeam = AdminCommandTarget_CT;
 
 		// Count all players in counter-terrorist team with skip flags
 		get_players_ex( iPlayers, iCount, iFlags, "CT" );
@@ -1267,8 +1354,75 @@ GetTeamTarget( szArgument[ ], iPlayers[ MAX_PLAYERS ], &iCount, iSkip = ACTS_NO 
 	return iTargetTeam;
 }
 
+// We want to skip immunity :P
+SeekImmunitySkip( id, temp_id )
+{
+	// Cache access flags
+	new iAccessAdmin = get_user_flags( id ), iAccessTarget = get_user_flags( temp_id );
+
+	// Admins without immunity CANNOT affect admins with immunity
+	if( !( iAccessAdmin & ADMIN_IMMUNITY ) && ( iAccessTarget & ADMIN_IMMUNITY ) )
+		return true;
+
+	return false;
+}
+
+// Get command target (A custom one)
+GetCommandTarget( id, const szArgument[ ], AdminCommandTargetFlag:iFlags = AdminCommandTargetFlag_None )
+{
+	// Attempt to find player
+	new temp_id = find_player( "bl", szArgument );
+
+	// Player found!
+	if( temp_id )
+	{
+		// Another match found
+		if( temp_id != find_player( "blj", szArgument ) )
+		{
+			console_print( id, "%L", id, "CMD_ERROR_MULTIPLE_TARGETS" );
+			return 0;
+		}
+	}
+	else if( ( temp_id = find_player( "c", szArgument ) ) == 0 && szArgument[ 0 ] == '#' && szArgument[ 1 ] )
+		temp_id = find_player( "k", str_to_num( szArgument[ 1 ] ) );
+
+	if( !temp_id )
+	{
+		console_print( id, "%L", id, "CMD_ERROR_NO_PLAYERS" );
+		return 0;
+	}
+
+	// No further checks required, return temp_id :)
+	if( ( iFlags & AdminCommandTargetFlag_None ) && temp_id )
+		return temp_id;
+
+	// Immunity check
+	if( ( iFlags & AdminCommandTargetFlag_Immunity ) && SeekImmunitySkip( id, temp_id ) )
+	{
+		console_print( id, "%L", id, "CMD_ERROR_IMMUNITY", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+		return 0;
+	}
+
+	// Alive check
+	if( ( iFlags & AdminCommandTargetFlag_Alive ) && !is_user_valid_alive( temp_id ) )
+	{
+		console_print( id, "%L", id, "CMD_ERROR_DEAD", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+		return 0;
+	}
+
+	// Bot check
+	if( ( iFlags & AdminCommandTargetFlag_Bots ) && is_user_bot( temp_id ) )
+	{
+		console_print( id, "%L", id, "CMD_ERROR_BOT", GetAuthenticationInfo( temp_id, AuthenticationInfo_Name ) );
+		return 0;
+	}
+
+	// Return found player index
+	return temp_id;
+}
+
 // Formats a string to player authentication information as defined
-GetAuthenticationInfo( id, iAuthenticationInfo )
+GetAuthenticationInfo( id, AuthenticationInfo:iAuthenticationInfo )
 {
 	// Declare a variable
 	static szAuthenticationInfo[ 32 ];
@@ -1277,13 +1431,13 @@ GetAuthenticationInfo( id, iAuthenticationInfo )
 	switch( iAuthenticationInfo )
 	{
 		// Get player's name
-		case AI_NAME: get_user_name( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ) );
+		case AuthenticationInfo_Name: get_user_name( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ) );
 
 		// Get player's authentication id
-		case AI_AUTHID: get_user_authid( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ) );
+		case AuthenticationInfo_AuthID: get_user_authid( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ) );
 
 		// Get player's IP without port
-		case AI_IP: get_user_ip( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ), true );
+		case AuthenticationInfo_IP: get_user_ip( id, szAuthenticationInfo, charsmax( szAuthenticationInfo ), true );
 	}
 
 	// Return our formatted string

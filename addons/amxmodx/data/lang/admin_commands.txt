@@ -1,7 +1,11 @@
 [en]
 CMD_ERROR_NO_PLAYERS = No players could be targeted.
+CMD_ERROR_MULTIPLE_TARGETS = Multiple targets with similar argument found.
 CMD_ERROR_NO_TEAM = Command cannot be performed to set on invalid team.
 CMD_ERROR_ALIVE = Command cannot be performed on an alive player (%s).
+CMD_ERROR_DEAD = Command cannot be performed on a dead player (%s).
+CMD_ERROR_BOT = Command cannot be performed on a bot (%s).
+CMD_ERROR_IMMUNITY = Command cannot be performed on a player with immunity (%s).
 
 MSG_CS_TEAM_T = TERRORIST
 MSG_CS_TEAM_CT = COUNTER-TERRORIST
